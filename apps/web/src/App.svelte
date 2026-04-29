@@ -4,6 +4,11 @@
   type Pt = number;
 
   let activeTool = $state('select');
+  let zoom = $state(1);
+  let selectedFrameId = $state<string | null>(null);
+  let doc = $state({
+    spreads: []
+  });
 
   async function handleOpen() {
     try {
