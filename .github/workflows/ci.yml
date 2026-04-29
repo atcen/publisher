@@ -154,11 +154,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: nightly
-          releaseName: "Nightly Build (__DATE__)"
-          releaseBody: "Automated nightly build. Not stable."
-          releaseDraft: true
-          prerelease: true
           args: "--target ${{ matrix.target }}"
           projectPath: "apps/desktop"
 
@@ -172,7 +167,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Update Nightly Release
+      - name: Create/Update Nightly Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -184,9 +179,12 @@ jobs:
           git tag -f "$TAG"
           git push origin "refs/tags/$TAG" --force
 
-          # The tauri-action creates draft releases. 
-          # We'll use gh release edit to make the latest one public as nightly.
-          # Note: tauri-action handles most of this, but we ensure the tag is updated.
-          
-          # Wait for drafts to be created if necessary or just publish
-          gh release edit "$TAG" --draft=false --prerelease --title "Nightly build ($DATE)" --notes "Automated build from commit \`$COMMIT\`."
+          # Delete existing draft release if it exists to avoid conflicts
+          gh release delete "$TAG" --cleanup-tag --yes 2>/dev/null || true
+
+          # Create new nightly release
+          gh release create "$TAG" \
+            --title "Nightly build ($DATE)" \
+            --notes "Automated build from commit \`$COMMIT\`. Built with Tauri." \
+            --prerelease \
+            --latest=false
