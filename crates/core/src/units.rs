@@ -13,6 +13,12 @@ pub enum Unit {
     Pixel,      // px (at document DPI)
 }
 
+impl Default for Unit {
+    fn default() -> Self {
+        Unit::Point
+    }
+}
+
 impl Unit {
     /// Converts a value from this unit to absolute points (pt).
     /// For Unit::Pixel, the document's DPI must be provided.
@@ -25,10 +31,9 @@ impl Unit {
             Unit::Pixel => {
                 let d = dpi.expect("DPI required for pixel conversion") as f64;
                 if d <= 0.0 {
-                    0.0 // Or panic? Given it's internal core, maybe panic if we want to be strict.
-                } else {
-                    value * (POINTS_PER_INCH / d)
+                    panic!("DPI must be greater than 0 for pixel conversion");
                 }
+                value * (POINTS_PER_INCH / d)
             }
         }
     }
@@ -43,10 +48,9 @@ impl Unit {
             Unit::Pixel => {
                 let d = dpi.expect("DPI required for pixel conversion") as f64;
                 if d <= 0.0 {
-                    0.0
-                } else {
-                    points * (d / POINTS_PER_INCH)
+                    panic!("DPI must be greater than 0 for pixel conversion");
                 }
+                points * (d / POINTS_PER_INCH)
             }
         }
     }
@@ -69,13 +73,19 @@ mod tests {
         assert!((Unit::Millimeter.from_points(72.0, None) - 25.4).abs() < 0.0001);
         
         // Pixel at 300 DPI: 300 px = 1 inch = 72 pt
-        assert_eq!(Unit::Pixel.to_points(300.0, dpi), 72.0);
-        assert_eq!(Unit::Pixel.from_points(72.0, dpi), 300.0);
+        assert!((Unit::Pixel.to_points(300.0, dpi) - 72.0).abs() < 0.0001);
+        assert!((Unit::Pixel.from_points(72.0, dpi) - 300.0).abs() < 0.0001);
     }
     
     #[test]
     #[should_panic(expected = "DPI required")]
     fn test_pixel_requires_dpi() {
         Unit::Pixel.to_points(100.0, None);
+    }
+
+    #[test]
+    #[should_panic(expected = "DPI must be greater than 0")]
+    fn test_pixel_requires_positive_dpi() {
+        Unit::Pixel.to_points(100.0, Some(0));
     }
 }

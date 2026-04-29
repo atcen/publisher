@@ -55,7 +55,7 @@ impl DocumentBuilder {
     }
 
     pub fn with_pages(mut self, count: u32) -> Self {
-        self.pages_count = count;
+        self.pages_count = if count == 0 { 1 } else { count };
         self
     }
 
@@ -65,6 +65,10 @@ impl DocumentBuilder {
     }
 
     pub fn build(self) -> Document {
+        if self.pages_count == 0 {
+            // Should not happen with current with_pages, but for safety:
+            return self.with_pages(1).build();
+        }
         let (width, height) = self.format.dimensions_pt();
         
         let now = match SystemTime::now().duration_since(UNIX_EPOCH) {
@@ -143,5 +147,14 @@ mod tests {
         assert_eq!(doc.spreads[0].pages.len(), 1);
         assert_eq!(doc.spreads[1].pages.len(), 2);
         assert_eq!(doc.metadata.created_at, doc.metadata.modified_at);
+    }
+
+    #[test]
+    fn test_builder_zero_pages() {
+        let doc = DocumentBuilder::new()
+            .with_pages(0)
+            .build();
+        assert_eq!(doc.spreads.len(), 1);
+        assert_eq!(doc.spreads[0].pages.len(), 1);
     }
 }

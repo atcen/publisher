@@ -24,13 +24,22 @@ pub struct Document {
 pub struct Metadata {
     pub name: String,
     pub author: String,
+    #[serde(default)]
     pub description: String,
-    pub created_at: u64,  // Unix timestamp
+    #[serde(default)]
+    pub created_at: u64, // Unix timestamp
+    #[serde(default)]
     pub modified_at: u64, // Unix timestamp
     pub dpi: u32,
+    #[serde(default)]
     pub default_unit: Unit,
     pub default_bleed: Bleed,
+    #[serde(default = "default_color_profile")]
     pub color_profile: String,
+}
+
+fn default_color_profile() -> String {
+    "sRGB".to_string()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
