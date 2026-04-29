@@ -221,6 +221,7 @@ pub struct Indents {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct ParagraphStyle {
     pub name: String,
     pub based_on: Option<String>,
@@ -265,7 +266,18 @@ pub struct ObjectStyle {
 pub struct Styles {
     pub paragraph_styles: Vec<ParagraphStyle>,
     pub character_styles: Vec<CharacterStyle>,
+    #[serde(default)]
     pub object_styles: Vec<ObjectStyle>,
+}
+
+impl Default for Styles {
+    fn default() -> Self {
+        Self {
+            paragraph_styles: vec![ParagraphStyle::default()],
+            character_styles: Vec::new(),
+            object_styles: Vec::new(),
+        }
+    }
 }
 
 #[cfg(test)]

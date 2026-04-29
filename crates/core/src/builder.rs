@@ -1,4 +1,4 @@
-use crate::{Document, Metadata, Bleed, Styles, Spread, Page, Margins, ColorSwatch, Color, ParagraphStyle};
+use crate::{Document, Metadata, Bleed, Styles, Spread, Page, Margins, ColorSwatch, Color};
 use crate::units::Unit;
 use crate::paper::PaperFormat;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -112,6 +112,10 @@ impl DocumentBuilder {
             name: "Black".to_string(),
             color: Color::black(),
         });
+        swatches.push(ColorSwatch {
+            name: "Paper".to_string(),
+            color: Color::white(),
+        });
 
         Document {
             metadata: Metadata {
@@ -126,11 +130,7 @@ impl DocumentBuilder {
                 color_profile: self.color_profile,
             },
             swatches,
-            styles: Styles {
-                paragraph_styles: vec![ParagraphStyle::default()],
-                character_styles: Vec::new(),
-                object_styles: Vec::new(),
-            },
+            styles: Styles::default(),
             spreads,
         }
     }
