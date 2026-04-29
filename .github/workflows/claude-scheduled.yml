@@ -6,14 +6,18 @@ on:
   workflow_dispatch:
 
 jobs:
-  auto-issue:
+  # ─── Job 1: Pick an issue and write tests (red) ───────────────────────────
+  write-tests:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      pull-requests: write
       issues: write
       id-token: write
-      actions: read
+    outputs:
+      found:  ${{ steps.pick-issue.outputs.found }}
+      number: ${{ steps.pick-issue.outputs.number }}
+      title:  ${{ steps.pick-issue.outputs.title }}
+      branch: ${{ steps.pick-issue.outputs.branch }}
 
     steps:
       - name: Checkout repository
@@ -32,7 +36,6 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Pick highest priority open issue (p1 > p2 > p3 > p4 > unlabelled), then lowest number
           ISSUE=$(gh issue list \
             --state open \
             --limit 100 \
@@ -51,84 +54,159 @@ jobs:
 
           NUMBER=$(echo "$ISSUE" | jq -r '.number // empty')
           TITLE=$(echo "$ISSUE"  | jq -r '.title  // empty')
+          BRANCH="feature/issue-$NUMBER"
 
           if [ -z "$NUMBER" ]; then
             echo "found=false" >> "$GITHUB_OUTPUT"
           else
-            echo "found=true"        >> "$GITHUB_OUTPUT"
-            echo "number=$NUMBER"    >> "$GITHUB_OUTPUT"
-            echo "title=$TITLE"      >> "$GITHUB_OUTPUT"
-            # Mark as in-progress so parallel runs don't pick the same issue
+            echo "found=true"      >> "$GITHUB_OUTPUT"
+            echo "number=$NUMBER"  >> "$GITHUB_OUTPUT"
+            echo "title=$TITLE"    >> "$GITHUB_OUTPUT"
+            echo "branch=$BRANCH"  >> "$GITHUB_OUTPUT"
             gh issue edit "$NUMBER" --add-label "in-progress"
           fi
 
-      - name: Run Claude Code (autonomous issue agent)
+      - name: Agent 1 — Write tests only (no implementation)
         if: steps.pick-issue.outputs.found == 'true'
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            You are a test engineer. Your ONLY job is to write tests for GitHub issue #${{ steps.pick-issue.outputs.number }}: "${{ steps.pick-issue.outputs.title }}"
+
+            You must NOT implement any feature code. Only tests.
+
+            ## Step 1 — Read the issue
+            gh issue view ${{ steps.pick-issue.outputs.number }} --json title,body,comments
+            Every acceptance criterion maps directly to one or more tests.
+
+            ## Step 2 — Create the feature branch
+            git checkout -b ${{ steps.pick-issue.outputs.branch }}
+
+            ## Step 3 — Write tests at every relevant level
+            Write tests that will FAIL because the feature doesn't exist yet (red phase of TDD).
+
+            **Rust unit/integration tests** (in the relevant crate under `crates/` or `apps/`):
+            - One `#[test]` per acceptance criterion
+            - Test names must clearly describe what they verify
+            - Use `todo!()` or `unimplemented!()` only if an interface doesn't exist yet
+
+            **Playwright E2E tests** (in `tests/e2e/`) for any UI acceptance criteria:
+            - File: `tests/e2e/<feature-name>.spec.ts`
+            - One `test()` block per UI acceptance criterion
+            - Tests must target the actual Svelte UI behaviour described in the issue
+            - Tests should fail because the UI feature isn't built yet
+
+            ## Step 4 — Verify tests are RED
+            Run `cargo test --workspace 2>&1 | tail -20` — confirm tests exist and fail (not compile errors unrelated to the feature).
+            If Playwright tests were written, note them in the commit message.
+
+            ## Step 5 — Commit and push
+            git add -A
+            git commit -m "Add failing tests for issue #${{ steps.pick-issue.outputs.number }}"
+            git push -u origin ${{ steps.pick-issue.outputs.branch }}
+
+            STOP HERE. Do not implement anything.
+          claude_args: >
+            --model claude-haiku-4-5-20251001
+            --max-turns 80
+
+      - name: Clean up on failure
+        if: failure() && steps.pick-issue.outputs.found == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh issue edit ${{ steps.pick-issue.outputs.number }} --remove-label "in-progress" || true
+
+  # ─── Job 2: Implement until all tests are green ───────────────────────────
+  implement:
+    needs: write-tests
+    if: needs.write-tests.outputs.found == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+      actions: read
+
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.write-tests.outputs.branch }}
+          fetch-depth: 1
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Agent 2 — Implement until tests are green
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           additional_permissions: |
             actions: read
           prompt: |
-            You are an autonomous developer agent. Your task is to implement GitHub issue #${{ steps.pick-issue.outputs.number }}: "${{ steps.pick-issue.outputs.title }}"
+            You are an implementer agent. Your job is to make the failing tests pass for GitHub issue #${{ needs.write-tests.outputs.number }}: "${{ needs.write-tests.outputs.title }}"
 
-            Work through these steps completely:
+            The tests have already been written by a separate agent. You must NOT modify test files.
 
-            ## Step 1 — Read the issue
-            gh issue view ${{ steps.pick-issue.outputs.number }} --json title,body,comments
-            Understand what needs to be built. The acceptance criteria in the body map directly to tests.
+            ## Step 1 — Understand the tests
+            Read the failing tests to understand exactly what needs to be built:
+            - Rust tests: `cargo test --workspace 2>&1` — read every failure
+            - Playwright tests if present: `cat tests/e2e/*.spec.ts`
+            gh issue view ${{ needs.write-tests.outputs.number }} --json title,body
 
-            ## Step 2 — Create a feature branch
-            git checkout -b feature/issue-${{ steps.pick-issue.outputs.number }}
+            ## Step 2 — Implement
+            Write only the production code needed to make the tests pass.
+            Key architecture constraints (from CLAUDE.md):
+            - `crates/core` must have zero platform dependencies (no filesystem, no GPU, no UI)
+            - All document mutations go through automerge-rs, never direct struct mutation
+            - No `#[cfg(feature = "pro")]` on core functionality
 
-            ## Step 3 — Implement (TDD, following CLAUDE.md)
-            - Write acceptance tests FIRST in the relevant crate
-            - Implement the feature until `cargo test --workspace` is fully green
-            - Key constraints from CLAUDE.md:
-              * crates/core must have zero platform dependencies (no filesystem, no GPU, no UI)
-              * All document mutations go through the CRDT layer (automerge-rs), never direct struct mutation
-              * No feature gates on core functionality (#[cfg(feature = "pro")] is forbidden)
+            ## Step 3 — Green loop
+            Run `cargo test --workspace` after each change.
+            Fix compilation errors and test failures until ALL tests pass.
+            Do NOT modify test files — if a test seems wrong, leave a comment and work around it.
 
-            ## Step 4 — Self-review loop
-            Review your own changes critically. For each finding, fix it and re-run tests.
-            Check for:
-            - Correctness and adequate test coverage
-            - Security (no unjustified unsafe, no command injection)
+            ## Step 4 — Self-review
+            Review your implementation for:
+            - Architecture violations (platform code in crates/core)
+            - Security issues (unjustified unsafe, injection)
             - AGPL v3 compliance (no proprietary dependencies)
-            - Architecture violations (platform code leaking into crates/core)
-            - Code quality (clear naming, no unnecessary comments, no dead code)
-            Repeat until you are genuinely satisfied with the result.
+            - Dead code, unclear naming
+            Fix findings, re-run tests.
 
             ## Step 5 — Commit and open PR
-            Commit with a clean message (imperative mood, max 72 chars, no co-author lines, no "feat:" prefixes).
-            Then create the PR:
+            git add -A
+            git commit -m "<imperative summary, max 72 chars>"
             gh pr create \
               --title "<imperative title, max 72 chars>" \
               --body "## Summary
-            <concise description of what was implemented and why>
+            <what was implemented>
 
-            Closes #${{ steps.pick-issue.outputs.number }}" \
+            Closes #${{ needs.write-tests.outputs.number }}" \
               --label auto
 
             ## Step 6 — Wait for CI and merge
-            Watch CI: gh pr checks --watch
-            - If all checks pass: gh pr merge --squash --delete-branch
-            - If checks fail: read the failure, fix the root cause, push the fix, watch again
-            Repeat until merged or you conclude the issue is genuinely blocked (then leave a comment explaining why).
+            gh pr checks --watch
+            - All green: gh pr merge --squash --delete-branch
+            - Failures: fix root cause, push, watch again
 
             ## Step 7 — Clean up
-            gh issue edit ${{ steps.pick-issue.outputs.number }} --remove-label "in-progress"
+            gh issue edit ${{ needs.write-tests.outputs.number }} --remove-label "in-progress"
           claude_args: >
             --model claude-haiku-4-5-20251001
             --max-turns 200
 
-      - name: Clean up in-progress label on failure
-        if: failure() && steps.pick-issue.outputs.found == 'true'
+      - name: Clean up on failure
+        if: failure()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh issue edit ${{ steps.pick-issue.outputs.number }} --remove-label "in-progress" || true
+        run: gh issue edit ${{ needs.write-tests.outputs.number }} --remove-label "in-progress" || true
 
-      - name: No open issues
-        if: steps.pick-issue.outputs.found != 'true'
-        run: echo "No open issues without in-progress label — nothing to do."
+      - name: No issues found
+        if: needs.write-tests.outputs.found != 'true'
+        run: echo "No open issues — nothing to do."
