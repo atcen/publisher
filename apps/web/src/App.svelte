@@ -1,77 +1,29 @@
 <script lang="ts">
+  import { invoke } from "@tauri-apps/api/core";
+
   type Pt = number;
-
-  interface Frame {
-    id: string;
-    Text?: {
-      x: Pt;
-      y: Pt;
-      width: Pt;
-      height: Pt;
-      content: string;
-    };
-  }
-
-  interface Page {
-    id: string;
-    width: Pt;
-    height: Pt;
-    frames: Frame[];
-  }
-
-  interface Spread {
-    id: string;
-    pages: Page[];
-  }
-
-  interface Document {
-    metadata: {
-      name: string;
-    };
-    spreads: Spread[];
-  }
-
-  let doc = $state<Document>({
-    metadata: { name: "Publisher Prototyp v1" },
-    spreads: [
-      {
-        id: "s1",
-        pages: [
-          {
-            id: "p1",
-            width: 595.27,
-            height: 841.89,
-            frames: [
-              {
-                id: "f1",
-                Text: {
-                  x: 50,
-                  y: 50,
-                  width: 400,
-                  height: 60,
-                  content: "Willkommen im Editor!",
-                },
-              },
-              {
-                id: "f2",
-                Text: {
-                  x: 50,
-                  y: 120,
-                  width: 300,
-                  height: 150,
-                  content: "Dies ist ein interaktiver Prototyp. Klicke auf diesen Text, um ihn zu bearbeiten.",
-                },
-              },
-            ],
-          },
-        ],
-      },
-    ],
-  });
-
-  let zoom = $state(0.8);
-  let selectedFrameId = $state<string | null>(null);
+...
   let activeTool = $state('select');
+
+  async function handleOpen() {
+    try {
+      const path = await invoke("open_file");
+      console.log("Opened:", path);
+      // Here you would load the document from path
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  async function handleSave() {
+    try {
+      const path = await invoke("save_file");
+      console.log("Saved to:", path);
+      // Here you would save the document to path
+    } catch (e) {
+      console.error(e);
+    }
+  }
 
   let selectedFrame = $derived.by(() => {
     for (const spread of doc.spreads) {
@@ -89,7 +41,13 @@
   <nav class="menu-bar">
     <div class="logo">PUBLISHER</div>
     <div class="menu-items">
-      <span>Datei</span>
+      <div class="menu-dropdown">
+        <span>Datei</span>
+        <div class="dropdown-content">
+          <button onclick={handleOpen}>Öffnen...</button>
+          <button onclick={handleSave}>Speichern</button>
+        </div>
+      </div>
       <span>Bearbeiten</span>
       <span>Layout</span>
       <span>Objekt</span>
@@ -205,6 +163,11 @@
   .menu-bar { height: 32px; background: #2d2d2d; display: flex; align-items: center; padding: 0 12px; font-size: 13px; border-bottom: 1px solid #111; gap: 20px; }
   .logo { font-weight: bold; color: #fff; letter-spacing: 1px; }
   .menu-items { display: flex; gap: 15px; }
+  .menu-dropdown { position: relative; cursor: pointer; }
+  .dropdown-content { display: none; position: absolute; top: 100%; left: 0; background: #2d2d2d; border: 1px solid #111; min-width: 120px; z-index: 100; }
+  .menu-dropdown:hover .dropdown-content { display: block; }
+  .dropdown-content button { width: 100%; background: transparent; border: none; color: #ccc; padding: 8px 12px; text-align: left; cursor: pointer; font-size: 13px; }
+  .dropdown-content button:hover { background: #007acc; color: white; }
   .doc-title { margin-left: auto; color: #888; }
   .toolbar { position: absolute; left: 0; top: 32px; bottom: 25px; width: 40px; background: #2d2d2d; border-right: 1px solid #111; display: flex; flex-direction: column; align-items: center; padding-top: 10px; gap: 5px; z-index: 10; }
   .toolbar button { width: 30px; height: 30px; background: transparent; border: none; color: #ccc; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; }

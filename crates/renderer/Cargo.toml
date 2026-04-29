@@ -1,10 +1,11 @@
 [package]
 name = "publisher-renderer"
 version.workspace = true
+authors.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [dependencies]
 publisher-core = { path = "../core" }
-vello.workspace = true
-wgpu.workspace = true
+vello = { workspace = true }
+wgpu = { workspace = true }
