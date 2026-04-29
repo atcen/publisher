@@ -9,6 +9,10 @@ on:
 env:
   CARGO_TERM_COLOR: always
 
+concurrency:
+  group: nightly-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   test:
     name: Test
@@ -30,79 +34,6 @@ jobs:
       - name: Run tests
         run: cargo test --workspace
 
-  review:
-    name: Claude Code Review
-    needs: test
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
-      issues: read
-      id-token: write
-      actions: read
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
-
-      - name: Fetch linked issue
-        id: issue
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          ISSUE_NUMBER=$(gh pr view ${{ github.event.pull_request.number }} \
-            --json body --jq '.body' \
-            | grep -oE '(Closes|Fixes|Resolves) #[0-9]+' \
-            | grep -oE '[0-9]+' | head -1)
-
-          if [ -n "$ISSUE_NUMBER" ]; then
-            gh issue view "$ISSUE_NUMBER" --json number,title,body \
-              --jq '"## Linked Issue #\(.number) — \(.title)\n\n\(.body)"' \
-              > /tmp/issue_body.txt 2>/dev/null || echo "(Could not load issue)" > /tmp/issue_body.txt
-          else
-            echo "(No linked issue — reviewing code only)" > /tmp/issue_body.txt
-          fi
-
-      - name: Run Claude Code Review
-        id: claude-review
-        uses: anthropics/claude-code-action@v1
-        with:
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          additional_permissions: |
-            actions: read
-          prompt: |
-            Review this pull request for the Publisher desktop publishing application.
-
-            Start by reading the linked issue requirements:
-              cat /tmp/issue_body.txt
-
-            Then review the PR diff and check the following — in this order:
-
-            ## 1. Acceptance criteria (most important)
-            Go through every requirement and acceptance criterion listed in the issue.
-            For each one, explicitly state ✅ met or ❌ missing, with a short justification.
-            If there is no linked issue, skip this section.
-
-            ## 2. Architecture
-            - Does crates/core have any platform dependencies (filesystem, GPU, UI)?
-            - Do all document mutations go through automerge-rs, never direct struct mutation?
-
-            ## 3. TDD
-            - Are tests present for the new behaviour?
-            - Do the tests actually cover the acceptance criteria?
-
-            ## 4. Security
-            - Any unjustified unsafe code?
-            - All new dependencies AGPL v3 compatible?
-
-            ## 5. Code quality
-            - Dead code, unnecessary comments, unclear naming?
-
-            Post a single review comment with your findings.
-            - If any acceptance criterion is ❌ missing: request changes.
-            - If all criteria are met and no blocking issues: approve the PR.
 
   build-artifacts:
     name: Build (${{ matrix.name }})
@@ -154,13 +85,20 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: nightly
-          releaseName: "Nightly Build (__DATE__)"
-          releaseBody: "Automated nightly build. Not stable."
-          releaseDraft: true
-          prerelease: true
           args: "--target ${{ matrix.target }}"
           projectPath: "apps/desktop"
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: artifacts-${{ matrix.target }}
+          path: |
+            apps/desktop/target/${{ matrix.target }}/release/bundle/dmg/*.dmg
+            apps/desktop/target/${{ matrix.target }}/release/bundle/msi/*.msi
+            apps/desktop/target/${{ matrix.target }}/release/bundle/deb/*.deb
+            apps/desktop/target/${{ matrix.target }}/release/bundle/appimage/*.AppImage
+          if-no-files-found: ignore
+          retention-days: 1
 
   release-nightly:
     name: Publish Nightly Release
@@ -172,7 +110,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Update Nightly Release
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-files
+          pattern: artifacts-*
+
+      - name: Create/Update Nightly Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -180,13 +124,29 @@ jobs:
           COMMIT=$(git rev-parse --short HEAD)
           DATE=$(date -u '+%Y-%m-%d %H:%M UTC')
 
-          # Re-tag the current commit as nightly
-          git tag -f "$TAG"
-          git push origin "refs/tags/$TAG" --force
+          # Delete existing nightly release and tag to start fresh
+          gh release delete "$TAG" --yes 2>/dev/null || true
+          git push origin ":refs/tags/$TAG" 2>/dev/null || true
 
-          # The tauri-action creates draft releases. 
-          # We'll use gh release edit to make the latest one public as nightly.
-          # Note: tauri-action handles most of this, but we ensure the tag is updated.
-          
-          # Wait for drafts to be created if necessary or just publish
-          gh release edit "$TAG" --draft=false --prerelease --title "Nightly build ($DATE)" --notes "Automated build from commit \`$COMMIT\`."
+          # Create fresh nightly tag pointing to current commit
+          git tag "$TAG" "$GITHUB_SHA"
+          git push origin "refs/tags/$TAG"
+
+          # Create new nightly release
+          gh release create "$TAG" \
+            --title "Nightly build ($DATE)" \
+            --notes "Automated build from commit \`$COMMIT\`. Built with Tauri." \
+            --prerelease \
+            --latest=false
+
+      - name: Upload release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="nightly"
+
+          # Find and upload all built artifacts
+          find release-files -type f \( -name "*.dmg" -o -name "*.msi" -o -name "*.deb" -o -name "*.AppImage" \) | while read file; do
+            echo "Uploading: $file"
+            gh release upload "$TAG" "$file" --clobber
+          done
