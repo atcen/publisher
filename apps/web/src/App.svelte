@@ -2,7 +2,7 @@
   import { invoke } from "@tauri-apps/api/core";
 
   type Pt = number;
-...
+
   let activeTool = $state('select');
 
   async function handleOpen() {
