@@ -47,10 +47,32 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Run Claude Code Review
-        id: claude-review
+      - name: Fetch linked issue
+        id: issue
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ISSUE_NUMBER=$(gh pr view ${{ github.event.pull_request.number }} \
+            --json body --jq '.body' \
+            | grep -oE '(Closes|Fixes|Resolves) #[0-9]+' \
+            | grep -oE '[0-9]+' | head -1)
+
+          if [ -n "$ISSUE_NUMBER" ]; then
+            ISSUE_TEXT=$(gh issue view "$ISSUE_NUMBER" --json number,title,body \
+              --jq '"Linked Issue #\(.number): \(.title)\n\(.body)"' 2>/dev/null || echo "(Could not load issue)")
+          else
+            ISSUE_TEXT="No linked issue — reviewing code only"
+          fi
+
+          # Use heredoc for multiline output
+          {
+            echo "body<<EOF"
+            echo "$ISSUE_TEXT"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Run Claude Code Review
+        id: claude-review
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -59,20 +81,12 @@ jobs:
           prompt: |
             Review this pull request for the Publisher desktop publishing application.
 
-            Start by checking for any linked GitHub issue:
-            ```
-            gh pr view ${{ github.event.pull_request.number }} --json body
-            ```
+            ## Issue Context
+            ${{ steps.issue.outputs.body }}
 
-            If the PR body contains "Closes", "Fixes", or "Resolves" followed by an issue number, fetch that issue:
-            ```
-            gh issue view <issue-number> --json number,title,body
-            ```
+            ## Code Review
 
-            If there's a linked issue, review against its acceptance criteria.
-            If not, note that no issue is linked and review code only.
-
-            Then review the PR diff and check the following — in this order:
+            Review the PR diff and check the following — in this order:
 
             ## 1. Acceptance criteria (most important)
             Go through every requirement and acceptance criterion listed in the issue.
