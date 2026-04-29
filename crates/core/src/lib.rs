@@ -3,6 +3,10 @@ use serde::{Deserialize, Serialize};
 /// Native units in points (pt). 1 pt = 1/72 inch.
 pub type Pt = f64;
 
+pub fn init() {
+    // Placeholder for core initialization
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Document {
     pub metadata: Metadata,
