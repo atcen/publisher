@@ -32,9 +32,10 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: read
+      pull-requests: write
       issues: read
       id-token: write
+      actions: read
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -46,6 +47,83 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
-          plugins: 'code-review@claude-code-plugins'
-          prompt: '/code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}'
+          additional_permissions: |
+            actions: read
+          prompt: |
+            Review this pull request for the Publisher desktop publishing application.
+
+            Focus on:
+            1. **Architecture** — Does crates/core have any platform dependencies (filesystem, GPU, UI)? All document mutations must go through automerge-rs, never direct struct mutation.
+            2. **TDD** — Are acceptance tests written before the implementation? Is test coverage adequate?
+            3. **Security** — Any unsafe code? AGPL v3 compatible dependencies only?
+            4. **Correctness** — Logic errors, edge cases, off-by-ones.
+            5. **Code quality** — Dead code, unnecessary comments, naming.
+
+            Post a review comment summarising findings. If there are blocking issues, request changes. If the PR is good, approve it.
+
+  build-artifacts:
+    name: Build (${{ matrix.target }})
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact-name: publisher-linux-x86_64
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            artifact-name: publisher-macos-x86_64
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            artifact-name: publisher-macos-aarch64
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact-name: publisher-windows-x86_64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Build release binary
+        run: cargo build --release --target ${{ matrix.target }} --package publisher-cli
+
+      - name: Collect artifacts (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          mkdir dist
+          cp target/${{ matrix.target }}/release/publisher-cli dist/
+          tar -czf ${{ matrix.artifact-name }}.tar.gz -C dist .
+
+      - name: Collect artifacts (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          mkdir dist
+          cp target/${{ matrix.target }}/release/publisher-cli.exe dist/
+          Compress-Archive -Path dist\* -DestinationPath ${{ matrix.artifact-name }}.zip
+
+      - name: Upload artifact (Unix)
+        if: runner.os != 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact-name }}
+          path: ${{ matrix.artifact-name }}.tar.gz
+          retention-days: 14
+
+      - name: Upload artifact (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact-name }}
+          path: ${{ matrix.artifact-name }}.zip
+          retention-days: 14
