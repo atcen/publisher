@@ -34,3 +34,13 @@ pub fn init() {
     publisher_core::init();
     println!("Publisher Renderer Initialized with Vello support");
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_renderer_init() {
+        init();
+    }
+}
