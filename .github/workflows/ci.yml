@@ -61,7 +61,7 @@ jobs:
       - name: Install Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
 
       - name: Install dependencies (Linux)
         if: runner.os == 'Linux'
@@ -81,8 +81,9 @@ jobs:
         with:
           key: ${{ matrix.target }}
 
-      - name: Install Svelte dependencies
-        run: npm install --prefix apps/web
+      - name: Install dependencies
+        run: |
+          npm install --prefix apps/web
 
       - name: Set PKG_CONFIG_PATH (Linux only)
         if: runner.os == 'Linux'
