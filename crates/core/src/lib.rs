@@ -1,4 +1,9 @@
+pub mod units;
+pub mod paper;
+pub mod builder;
+
 use serde::{Deserialize, Serialize};
+use crate::units::Unit;
 
 /// Native units in points (pt). 1 pt = 1/72 inch.
 pub type Pt = f64;
@@ -19,8 +24,13 @@ pub struct Document {
 pub struct Metadata {
     pub name: String,
     pub author: String,
+    pub description: String,
+    pub created_at: u64,  // Unix timestamp
+    pub modified_at: u64, // Unix timestamp
     pub dpi: u32,
+    pub default_unit: Unit,
     pub default_bleed: Bleed,
+    pub color_profile: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -134,13 +144,18 @@ mod tests {
             metadata: Metadata {
                 name: "Test Doc".to_string(),
                 author: "Author".to_string(),
+                description: "".to_string(),
+                created_at: 0,
+                modified_at: 0,
                 dpi: 300,
+                default_unit: Unit::Point,
                 default_bleed: Bleed {
                     top: 0.0,
                     bottom: 0.0,
                     inside: 0.0,
                     outside: 0.0,
                 },
+                color_profile: "sRGB".to_string(),
             },
             swatches: vec![],
             styles: Styles {
