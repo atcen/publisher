@@ -12,6 +12,7 @@
     "windows": [
       {
         "title": "Publisher",
+        "label": "main",
         "width": 1200,
         "height": 800
       }
@@ -40,7 +41,25 @@
       "frameworks": [],
       "minimumSystemVersion": "11.0",
       "exceptionDomain": "",
-      "entitlements": null
+      "entitlements": null,
+      "dmg": {
+        "windowPosition": {
+          "x": 400,
+          "y": 400
+        },
+        "windowSize": {
+          "width": 540,
+          "height": 380
+        },
+        "appPosition": {
+          "x": 130,
+          "y": 150
+        },
+        "applicationFolderPosition": {
+          "x": 410,
+          "y": 150
+        }
+      }
     },
     "windows": {
       "certificateThumbprint": null,
