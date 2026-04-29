@@ -1,4 +1,4 @@
-use crate::{Document, Metadata, Bleed, Styles, Spread, Page, Margins};
+use crate::{Document, Metadata, Bleed, Styles, Spread, Page, Margins, ColorSwatch, Color, ParagraphStyle};
 use crate::units::Unit;
 use crate::paper::PaperFormat;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -107,6 +107,12 @@ impl DocumentBuilder {
             }
         }
 
+        let mut swatches = Vec::new();
+        swatches.push(ColorSwatch {
+            name: "Black".to_string(),
+            color: Color::black(),
+        });
+
         Document {
             metadata: Metadata {
                 name: self.name,
@@ -119,10 +125,11 @@ impl DocumentBuilder {
                 default_bleed: self.bleed,
                 color_profile: self.color_profile,
             },
-            swatches: Vec::new(),
+            swatches,
             styles: Styles {
-                paragraph_styles: Vec::new(),
+                paragraph_styles: vec![ParagraphStyle::default()],
                 character_styles: Vec::new(),
+                object_styles: Vec::new(),
             },
             spreads,
         }
