@@ -109,7 +109,7 @@ jobs:
             ## Step 7 — Clean up
             gh issue edit ${{ steps.pick-issue.outputs.number }} --remove-label "in-progress"
           claude_args: >
-            --model claude-opus-4-7
+            --model claude-haiku-4-5-20251001
             --max-turns 200
 
       - name: Clean up in-progress label on failure
