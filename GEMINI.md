@@ -28,11 +28,11 @@ The project is organized as a Rust workspace with the following structure:
 - `backend/`: Axum-based collaboration and storage server.
 
 ## Building and Running
-*Note: The project is currently in the initialization phase.*
+The project is organized as a Rust workspace.
 
-- **TODO:** Initialize Rust workspace.
-- **TODO:** Document `cargo` commands for testing and building.
-- **TODO:** Document `npm`/`pnpm` commands for Svelte/Tauri frontend.
+- **Build all crates:** `cargo build --workspace`
+- **Run tests:** `cargo test --workspace`
+- **Run backend:** `cargo run -p publisher-backend`
 
 ## Development Conventions
 - **TDD (Test-Driven Development):** Every feature must have acceptance tests defined before implementation.
