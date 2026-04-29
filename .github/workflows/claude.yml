@@ -23,7 +23,7 @@ jobs:
       pull-requests: read
       issues: read
       id-token: write
-      actions: read # Required for Claude to read CI results on PRs
+      actions: read
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -35,16 +35,73 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-
-          # This is an optional setting that allows Claude to read CI results on PRs
           additional_permissions: |
             actions: read
 
-          # Optional: Give a custom prompt to Claude. If this is not specified, Claude will perform the instructions specified in the comment that tagged it.
-          # prompt: 'Update the pull request description to include a summary of changes.'
+  # Automatically rework PRs created by the autonomous agent when the reviewer requests changes
+  auto-rework:
+    if: |
+      github.event_name == 'pull_request_review' &&
+      github.event.review.state == 'changes_requested' &&
+      contains(github.event.pull_request.labels.*.name, 'auto')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+      actions: read
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
 
-          # Optional: Add claude_args to customize behavior and configuration
-          # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
-          # or https://code.claude.com/docs/en/cli-reference for available options
-          # claude_args: '--allowed-tools Bash(gh pr *)'
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
 
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Run Claude Code (auto-rework)
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          additional_permissions: |
+            actions: read
+          prompt: |
+            You are an autonomous developer agent. The code reviewer has requested changes on PR #${{ github.event.pull_request.number }}.
+
+            ## Step 1 — Read the review feedback
+            gh pr view ${{ github.event.pull_request.number }} --json reviews,comments \
+              | jq '.reviews[-1]'
+
+            Also read all review comments:
+            gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/reviews \
+              | jq '.[-1] | {state, body}'
+            gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/comments \
+              | jq '.[] | {path, body, line}'
+
+            ## Step 2 — Read the original issue requirements
+            ISSUE_NUMBER=$(gh pr view ${{ github.event.pull_request.number }} --json body \
+              --jq '.body' | grep -oE '(Closes|Fixes|Resolves) #[0-9]+' | grep -oE '[0-9]+' | head -1)
+            if [ -n "$ISSUE_NUMBER" ]; then
+              gh issue view "$ISSUE_NUMBER" --json title,body
+            fi
+
+            ## Step 3 — Fix every requested change
+            Address all reviewer feedback systematically.
+            Re-run `cargo test --workspace` after changes — all tests must stay green.
+
+            ## Step 4 — Commit and push
+            Commit with a clean message describing what was fixed.
+            git push
+
+            ## Step 5 — Re-request review
+            Leave a comment on the PR summarising what was changed in response to the review.
+            gh pr comment ${{ github.event.pull_request.number }} \
+              --body "Addressed review feedback: <summary of changes>"
+          claude_args: >
+            --model claude-haiku-4-5-20251001
+            --max-turns 150
