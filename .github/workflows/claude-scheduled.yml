@@ -27,77 +27,98 @@ jobs:
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
 
-      - name: Check for open issues
-        id: check-issues
+      - name: Pick next open issue
+        id: pick-issue
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          COUNT=$(gh issue list --label backlog --state open --limit 1 --json number | jq length)
-          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+          # Take the oldest open issue that is not currently in-progress
+          ISSUE=$(gh issue list \
+            --state open \
+            --limit 50 \
+            --json number,title,labels \
+            | jq '[.[] | select(.labels | map(.name) | contains(["in-progress"]) | not)] | first')
+
+          NUMBER=$(echo "$ISSUE" | jq -r '.number // empty')
+          TITLE=$(echo "$ISSUE"  | jq -r '.title  // empty')
+
+          if [ -z "$NUMBER" ]; then
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=true"        >> "$GITHUB_OUTPUT"
+            echo "number=$NUMBER"    >> "$GITHUB_OUTPUT"
+            echo "title=$TITLE"      >> "$GITHUB_OUTPUT"
+            # Mark as in-progress so parallel runs don't pick the same issue
+            gh issue edit "$NUMBER" --add-label "in-progress"
+          fi
 
       - name: Run Claude Code (autonomous issue agent)
-        if: steps.check-issues.outputs.count != '0'
+        if: steps.pick-issue.outputs.found == 'true'
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           additional_permissions: |
             actions: read
           prompt: |
-            You are an autonomous developer agent. Work through these steps completely:
+            You are an autonomous developer agent. Your task is to implement GitHub issue #${{ steps.pick-issue.outputs.number }}: "${{ steps.pick-issue.outputs.title }}"
 
-            ## Step 1 — Pick an issue
-            Run: gh issue list --label backlog --state open --limit 1 --json number,title,body,labels
-            If no issues are found, stop immediately.
-            Note the issue number as ISSUE_NUMBER.
+            Work through these steps completely:
+
+            ## Step 1 — Read the issue
+            gh issue view ${{ steps.pick-issue.outputs.number }} --json title,body,comments
+            Understand what needs to be built. The acceptance criteria in the body map directly to tests.
 
             ## Step 2 — Create a feature branch
-            git checkout -b feature/issue-$ISSUE_NUMBER
-            Label the issue as in-progress: gh issue edit $ISSUE_NUMBER --add-label "in-progress"
+            git checkout -b feature/issue-${{ steps.pick-issue.outputs.number }}
 
             ## Step 3 — Implement (TDD, following CLAUDE.md)
-            - Read the issue body carefully; acceptance criteria map directly to tests
             - Write acceptance tests FIRST in the relevant crate
             - Implement the feature until `cargo test --workspace` is fully green
             - Key constraints from CLAUDE.md:
-              * crates/core must have zero platform dependencies
-              * All document mutations go through the CRDT layer (automerge-rs)
-              * No feature gates on core functionality
+              * crates/core must have zero platform dependencies (no filesystem, no GPU, no UI)
+              * All document mutations go through the CRDT layer (automerge-rs), never direct struct mutation
+              * No feature gates on core functionality (#[cfg(feature = "pro")] is forbidden)
 
             ## Step 4 — Self-review loop
-            Review your own changes critically. Check for:
-            - Correctness and test coverage
-            - Security issues (no unsafe code without justification)
-            - AGPL v3 compliance (no proprietary deps)
-            - Architecture violations (platform code leaking into core)
-            - Code quality (naming, no unnecessary comments, no dead code)
-            Fix every issue you find, re-run `cargo test --workspace`, repeat until satisfied.
+            Review your own changes critically. For each finding, fix it and re-run tests.
+            Check for:
+            - Correctness and adequate test coverage
+            - Security (no unjustified unsafe, no command injection)
+            - AGPL v3 compliance (no proprietary dependencies)
+            - Architecture violations (platform code leaking into crates/core)
+            - Code quality (clear naming, no unnecessary comments, no dead code)
+            Repeat until you are genuinely satisfied with the result.
 
             ## Step 5 — Commit and open PR
-            Commit with a clean message (imperative mood, max 72 chars, no co-author lines).
-            Then:
+            Commit with a clean message (imperative mood, max 72 chars, no co-author lines, no "feat:" prefixes).
+            Then create the PR:
             gh pr create \
               --title "<imperative title, max 72 chars>" \
-              --body "$(cat <<'EOF'
-            ## Summary
-            <what was implemented and why>
+              --body "## Summary
+            <concise description of what was implemented and why>
 
-            Closes #$ISSUE_NUMBER
-            EOF
-            )" \
+            Closes #${{ steps.pick-issue.outputs.number }}" \
               --label auto
 
             ## Step 6 — Wait for CI and merge
-            gh pr checks --watch --fail-fast
-            If all checks pass: gh pr merge --squash --delete-branch
-            If checks fail: read the failure output, fix the issues, push the fix, wait again.
-            Repeat until merged or you determine the issue is blocked.
+            Watch CI: gh pr checks --watch
+            - If all checks pass: gh pr merge --squash --delete-branch
+            - If checks fail: read the failure, fix the root cause, push the fix, watch again
+            Repeat until merged or you conclude the issue is genuinely blocked (then leave a comment explaining why).
 
-            ## Step 7 — Remove in-progress label
-            gh issue edit $ISSUE_NUMBER --remove-label "in-progress"
+            ## Step 7 — Clean up
+            gh issue edit ${{ steps.pick-issue.outputs.number }} --remove-label "in-progress"
           claude_args: >
             --model claude-opus-4-7
             --max-turns 200
 
-      - name: Notify if no issues found
-        if: steps.check-issues.outputs.count == '0'
-        run: echo "No open backlog issues found — skipping this run."
+      - name: Clean up in-progress label on failure
+        if: failure() && steps.pick-issue.outputs.found == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue edit ${{ steps.pick-issue.outputs.number }} --remove-label "in-progress" || true
+
+      - name: No open issues
+        if: steps.pick-issue.outputs.found != 'true'
+        run: echo "No open issues without in-progress label — nothing to do."
