@@ -29,10 +29,10 @@ impl DocumentBuilder {
             facing_pages: true,
             pages_count: 1,
             margins: Margins {
-                top: Unit::Millimeter.to_points(12.7, 72),
-                bottom: Unit::Millimeter.to_points(12.7, 72),
-                inside: Unit::Millimeter.to_points(12.7, 72),
-                outside: Unit::Millimeter.to_points(12.7, 72),
+                top: Unit::Millimeter.to_points(12.7, None),
+                bottom: Unit::Millimeter.to_points(12.7, None),
+                inside: Unit::Millimeter.to_points(12.7, None),
+                outside: Unit::Millimeter.to_points(12.7, None),
             },
             bleed: Bleed {
                 top: 0.0,
@@ -67,10 +67,15 @@ impl DocumentBuilder {
     pub fn build(self) -> Document {
         let (width, height) = self.format.dimensions_pt();
         
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs();
+        let now = match SystemTime::now().duration_since(UNIX_EPOCH) {
+            Ok(duration) => duration.as_secs(),
+            Err(_) => {
+                // If the system clock is earlier than the Unix epoch, clamp the
+                // document timestamps to 0 rather than silently relying on a
+                // default duration.
+                0
+            }
+        };
 
         let mut spreads = Vec::new();
         let mut current_pages = Vec::new();
@@ -137,6 +142,6 @@ mod tests {
         assert_eq!(doc.spreads.len(), 2);
         assert_eq!(doc.spreads[0].pages.len(), 1);
         assert_eq!(doc.spreads[1].pages.len(), 2);
-        assert!(doc.metadata.created_at > 0);
+        assert_eq!(doc.metadata.created_at, doc.metadata.modified_at);
     }
 }
