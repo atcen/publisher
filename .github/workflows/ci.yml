@@ -9,6 +9,10 @@ on:
 env:
   CARGO_TERM_COLOR: always
 
+concurrency:
+  group: nightly-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   test:
     name: Test
@@ -84,6 +88,18 @@ jobs:
           args: "--target ${{ matrix.target }}"
           projectPath: "apps/desktop"
 
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: artifacts-${{ matrix.target }}
+          path: |
+            apps/desktop/target/${{ matrix.target }}/release/bundle/dmg/*.dmg
+            apps/desktop/target/${{ matrix.target }}/release/bundle/msi/*.msi
+            apps/desktop/target/${{ matrix.target }}/release/bundle/deb/*.deb
+            apps/desktop/target/${{ matrix.target }}/release/bundle/appimage/*.AppImage
+          if-no-files-found: ignore
+          retention-days: 1
+
   release-nightly:
     name: Publish Nightly Release
     needs: build-artifacts
@@ -94,6 +110,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-files
+          pattern: artifacts-*
+
       - name: Create/Update Nightly Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -102,12 +124,13 @@ jobs:
           COMMIT=$(git rev-parse --short HEAD)
           DATE=$(date -u '+%Y-%m-%d %H:%M UTC')
 
-          # Re-tag the current commit as nightly
-          git tag -f "$TAG"
-          git push origin "refs/tags/$TAG" --force
+          # Delete existing nightly release and tag to start fresh
+          gh release delete "$TAG" --yes 2>/dev/null || true
+          git push origin ":refs/tags/$TAG" 2>/dev/null || true
 
-          # Delete existing draft release if it exists to avoid conflicts
-          gh release delete "$TAG" --cleanup-tag --yes 2>/dev/null || true
+          # Create fresh nightly tag pointing to current commit
+          git tag "$TAG" "$GITHUB_SHA"
+          git push origin "refs/tags/$TAG"
 
           # Create new nightly release
           gh release create "$TAG" \
@@ -115,3 +138,15 @@ jobs:
             --notes "Automated build from commit \`$COMMIT\`. Built with Tauri." \
             --prerelease \
             --latest=false
+
+      - name: Upload release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="nightly"
+
+          # Find and upload all built artifacts
+          find release-files -type f \( -name "*.dmg" -o -name "*.msi" -o -name "*.deb" -o -name "*.AppImage" \) | while read file; do
+            echo "Uploading: $file"
+            gh release upload "$TAG" "$file" --clobber
+          done
