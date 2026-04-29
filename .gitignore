@@ -2,3 +2,7 @@
 /wiki_repo
 .DS_Store
 *.rs.bk
+node_modules/
+dist/
+.vite/
+*.log
