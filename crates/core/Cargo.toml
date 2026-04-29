@@ -7,3 +7,4 @@ license.workspace = true
 [dependencies]
 serde.workspace = true
 automerge.workspace = true
+autosurgeon = "0.6"
