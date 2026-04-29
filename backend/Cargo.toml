@@ -1,0 +1,11 @@
+[package]
+name = "publisher-backend"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+publisher-core = { path = "../core" }
+axum.workspace = true
+tokio.workspace = true
+tracing.workspace = true

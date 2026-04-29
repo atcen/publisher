@@ -1,0 +1,8 @@
+[package]
+name = "publisher-typography"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+publisher-core = { path = "../core" }

@@ -1,0 +1,28 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/core",
+    "crates/typography",
+    "crates/color",
+    "crates/renderer",
+    "crates/export-pdf",
+    "crates/export-epub",
+    "crates/collab",
+    "backend",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Publisher Contributors"]
+license = "AGPL-3.0-only"
+repository = "https://github.com/atcen/publisher"
+
+[workspace.dependencies]
+automerge = "0.5"
+serde = { version = "1.0", features = ["derive"] }
+vello = "0.1"
+wgpu = "0.19"
+tokio = { version = "1", features = ["full"] }
+axum = "0.7"
+tracing = "0.1"
