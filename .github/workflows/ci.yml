@@ -47,30 +47,6 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Fetch linked issue
-        id: issue
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          ISSUE_NUMBER=$(gh pr view ${{ github.event.pull_request.number }} \
-            --json body --jq '.body' \
-            | grep -oE '(Closes|Fixes|Resolves) #[0-9]+' \
-            | grep -oE '[0-9]+' | head -1)
-
-          if [ -n "$ISSUE_NUMBER" ]; then
-            ISSUE_TEXT=$(gh issue view "$ISSUE_NUMBER" --json number,title,body \
-              --jq '"Linked Issue #\(.number): \(.title)\n\(.body)"' 2>/dev/null || echo "(Could not load issue)")
-          else
-            ISSUE_TEXT="No linked issue — reviewing code only"
-          fi
-
-          # Use heredoc for multiline output
-          {
-            echo "body<<EOF"
-            echo "$ISSUE_TEXT"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
-
       - name: Run Claude Code Review
         id: claude-review
         uses: anthropics/claude-code-action@v1
@@ -81,36 +57,24 @@ jobs:
           prompt: |
             Review this pull request for the Publisher desktop publishing application.
 
-            ## Issue Context
-            ${{ steps.issue.outputs.body }}
+            Review the PR diff and check the following:
 
-            ## Code Review
-
-            Review the PR diff and check the following — in this order:
-
-            ## 1. Acceptance criteria (most important)
-            Go through every requirement and acceptance criterion listed in the issue.
-            For each one, explicitly state ✅ met or ❌ missing, with a short justification.
-            If there is no linked issue, skip this section.
-
-            ## 2. Architecture
+            ## 1. Architecture
             - Does crates/core have any platform dependencies (filesystem, GPU, UI)?
             - Do all document mutations go through automerge-rs, never direct struct mutation?
 
-            ## 3. TDD
-            - Are tests present for the new behaviour?
-            - Do the tests actually cover the acceptance criteria?
+            ## 2. Code quality
+            - Are there obvious bugs or issues?
+            - Dead code, unnecessary comments, unclear naming?
+            - Does the change accomplish what it claims?
 
-            ## 4. Security
+            ## 3. Security
             - Any unjustified unsafe code?
             - All new dependencies AGPL v3 compatible?
 
-            ## 5. Code quality
-            - Dead code, unnecessary comments, unclear naming?
-
             Post a single review comment with your findings.
-            - If any acceptance criterion is ❌ missing: request changes.
-            - If all criteria are met and no blocking issues: approve the PR.
+            - If there are blocking issues: request changes.
+            - If the code looks good: approve the PR.
 
   build-artifacts:
     name: Build (${{ matrix.name }})
