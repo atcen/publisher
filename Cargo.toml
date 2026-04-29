@@ -8,6 +8,7 @@ members = [
     "crates/export-pdf",
     "crates/export-epub",
     "crates/collab",
+    "crates/wasm",
     "backend",
     "apps/cli",
     "apps/desktop/src-tauri",
