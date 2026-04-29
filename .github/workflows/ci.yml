@@ -84,6 +84,7 @@ jobs:
       - name: Install dependencies
         run: |
           npm install --prefix apps/web
+          npm install --prefix apps/desktop
 
       - name: Set PKG_CONFIG_PATH (Linux only)
         if: runner.os == 'Linux'
