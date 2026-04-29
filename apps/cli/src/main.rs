@@ -1,6 +1,6 @@
 use publisher_core::builder::DocumentBuilder;
 use publisher_core::paper::PaperFormat;
-use publisher_core::{Frame, TextFrame};
+use publisher_core::{Frame, TextFrame, Pt};
 
 fn main() {
     println!("--- Publisher Prototype ---");
@@ -17,7 +17,7 @@ fn main() {
     if let Some(spread) = doc.spreads.get_mut(0) {
         if let Some(page) = spread.pages.get_mut(0) {
             let text_frame = TextFrame::new(
-                50.0, 50.0, 400.0, 100.0,
+                Pt(50.0), Pt(50.0), Pt(400.0), Pt(100.0),
                 "Welcome to the Publisher Prototype!"
             );
             page.frames.push(Frame::Text(text_frame));

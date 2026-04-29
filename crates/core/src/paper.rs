@@ -1,4 +1,4 @@
-use crate::units::Unit;
+use crate::units::{Unit, Pt};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum PaperFormat {
@@ -6,11 +6,11 @@ pub enum PaperFormat {
     B0, B1, B2, B3, B4, B5, B6,
     Letter,
     Legal,
-    Custom { width_pt: f64, height_pt: f64 },
+    Custom { width_pt: Pt, height_pt: Pt },
 }
 
 impl PaperFormat {
-    pub fn dimensions_pt(self) -> (f64, f64) {
+    pub fn dimensions_pt(self) -> (Pt, Pt) {
         match self {
             // A-series
             PaperFormat::A0 => (Unit::Millimeter.to_points(841.0, None), Unit::Millimeter.to_points(1189.0, None)),
@@ -20,7 +20,7 @@ impl PaperFormat {
             PaperFormat::A4 => (Unit::Millimeter.to_points(210.0, None), Unit::Millimeter.to_points(297.0, None)),
             PaperFormat::A5 => (Unit::Millimeter.to_points(148.0, None), Unit::Millimeter.to_points(210.0, None)),
             PaperFormat::A6 => (Unit::Millimeter.to_points(105.0, None), Unit::Millimeter.to_points(148.0, None)),
-            
+
             // B-series
             PaperFormat::B0 => (Unit::Millimeter.to_points(1000.0, None), Unit::Millimeter.to_points(1414.0, None)),
             PaperFormat::B1 => (Unit::Millimeter.to_points(707.0, None), Unit::Millimeter.to_points(1000.0, None)),
@@ -29,11 +29,11 @@ impl PaperFormat {
             PaperFormat::B4 => (Unit::Millimeter.to_points(250.0, None), Unit::Millimeter.to_points(353.0, None)),
             PaperFormat::B5 => (Unit::Millimeter.to_points(176.0, None), Unit::Millimeter.to_points(250.0, None)),
             PaperFormat::B6 => (Unit::Millimeter.to_points(125.0, None), Unit::Millimeter.to_points(176.0, None)),
-            
+
             // US Letter / Legal
             PaperFormat::Letter => (Unit::Inch.to_points(8.5, None), Unit::Inch.to_points(11.0, None)),
             PaperFormat::Legal => (Unit::Inch.to_points(8.5, None), Unit::Inch.to_points(14.0, None)),
-            
+
             PaperFormat::Custom { width_pt, height_pt } => (width_pt, height_pt),
         }
     }

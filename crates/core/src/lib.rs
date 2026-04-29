@@ -3,10 +3,7 @@ pub mod paper;
 pub mod builder;
 
 use serde::{Deserialize, Serialize};
-use crate::units::Unit;
-
-/// Native units in points (pt). 1 pt = 1/72 inch.
-pub type Pt = f64;
+pub use crate::units::{Unit, Pt};
 
 pub fn init() {
     // Placeholder for core initialization
@@ -164,9 +161,9 @@ pub enum Color {
 impl Default for Indents {
     fn default() -> Self {
         Self {
-            left: 0.0,
-            right: 0.0,
-            first_line: 0.0,
+            left: Pt(0.0),
+            right: Pt(0.0),
+            first_line: Pt(0.0),
         }
     }
 }
@@ -179,13 +176,13 @@ impl Default for ParagraphStyle {
             next_style: None,
             font_family: "Inter".to_string(),
             font_style: "Regular".to_string(),
-            font_size: 12.0,
-            leading: 14.4,
+            font_size: Pt(12.0),
+            leading: Pt(14.4),
             tracking: 0.0,
             alignment: TextAlignment::Left,
             indents: Indents::default(),
-            space_before: 0.0,
-            space_after: 0.0,
+            space_before: Pt(0.0),
+            space_after: Pt(0.0),
             color_swatch: None,
         }
     }
@@ -298,10 +295,10 @@ mod tests {
                 dpi: 300,
                 default_unit: Unit::Point,
                 default_bleed: Bleed {
-                    top: 0.0,
-                    bottom: 0.0,
-                    inside: 0.0,
-                    outside: 0.0,
+                    top: Pt(0.0),
+                    bottom: Pt(0.0),
+                    inside: Pt(0.0),
+                    outside: Pt(0.0),
                 },
                 color_profile: "sRGB".to_string(),
             },
@@ -329,10 +326,10 @@ mod tests {
             dpi: 300,
             default_unit: Unit::Millimeter,
             default_bleed: Bleed {
-                top: 5.0,
-                bottom: 5.0,
-                inside: 5.0,
-                outside: 5.0,
+                top: Pt(5.0),
+                bottom: Pt(5.0),
+                inside: Pt(5.0),
+                outside: Pt(5.0),
             },
             color_profile: "sRGB".to_string(),
         };
@@ -350,49 +347,49 @@ mod tests {
     #[test]
     fn test_bleed_creation() {
         let bleed = Bleed {
-            top: 10.0,
-            bottom: 10.0,
-            inside: 15.0,
-            outside: 15.0,
+            top: Pt(10.0),
+            bottom: Pt(10.0),
+            inside: Pt(15.0),
+            outside: Pt(15.0),
         };
-        assert_eq!(bleed.top, 10.0);
-        assert_eq!(bleed.inside, 15.0);
+        assert_eq!(bleed.top, Pt(10.0));
+        assert_eq!(bleed.inside, Pt(15.0));
     }
 
     // ===== Page and Spread Tests =====
     #[test]
     fn test_page_creation() {
         let page = Page {
-            width: 595.0,
-            height: 842.0,
+            width: Pt(595.0),
+            height: Pt(842.0),
             margins: Margins {
-                top: 36.0,
-                bottom: 36.0,
-                inside: 36.0,
-                outside: 36.0,
+                top: Pt(36.0),
+                bottom: Pt(36.0),
+                inside: Pt(36.0),
+                outside: Pt(36.0),
             },
             frames: vec![],
         };
-        assert_eq!(page.width, 595.0);
-        assert_eq!(page.height, 842.0);
+        assert_eq!(page.width, Pt(595.0));
+        assert_eq!(page.height, Pt(842.0));
         assert_eq!(page.frames.len(), 0);
     }
 
     #[test]
     fn test_page_mutation() {
         let mut page = Page {
-            width: 595.0,
-            height: 842.0,
+            width: Pt(595.0),
+            height: Pt(842.0),
             margins: Margins {
-                top: 36.0,
-                bottom: 36.0,
-                inside: 36.0,
-                outside: 36.0,
+                top: Pt(36.0),
+                bottom: Pt(36.0),
+                inside: Pt(36.0),
+                outside: Pt(36.0),
             },
             frames: vec![],
         };
 
-        let frame = Frame::Text(TextFrame::new(50.0, 50.0, 200.0, 100.0, "Test content"));
+        let frame = Frame::Text(TextFrame::new(Pt(50.0), Pt(50.0), Pt(200.0), Pt(100.0), "Test content"));
         page.frames.push(frame);
 
         assert_eq!(page.frames.len(), 1);
@@ -401,13 +398,13 @@ mod tests {
     #[test]
     fn test_spread_creation() {
         let page1 = Page {
-            width: 595.0,
-            height: 842.0,
+            width: Pt(595.0),
+            height: Pt(842.0),
             margins: Margins {
-                top: 36.0,
-                bottom: 36.0,
-                inside: 36.0,
-                outside: 36.0,
+                top: Pt(36.0),
+                bottom: Pt(36.0),
+                inside: Pt(36.0),
+                outside: Pt(36.0),
             },
             frames: vec![],
         };
@@ -422,63 +419,63 @@ mod tests {
     // ===== Frame Tests =====
     #[test]
     fn test_text_frame_creation() {
-        let frame = TextFrame::new(10.0, 10.0, 100.0, 50.0, "Hello World");
-        assert_eq!(frame.x, 10.0);
-        assert_eq!(frame.y, 10.0);
-        assert_eq!(frame.width, 100.0);
-        assert_eq!(frame.height, 50.0);
+        let frame = TextFrame::new(Pt(10.0), Pt(10.0), Pt(100.0), Pt(50.0), "Hello World");
+        assert_eq!(frame.x, Pt(10.0));
+        assert_eq!(frame.y, Pt(10.0));
+        assert_eq!(frame.width, Pt(100.0));
+        assert_eq!(frame.height, Pt(50.0));
         assert_eq!(frame.content, "Hello World");
     }
 
     #[test]
     fn test_text_frame_mutation() {
-        let mut frame = TextFrame::new(10.0, 10.0, 100.0, 50.0, "Hello");
+        let mut frame = TextFrame::new(Pt(10.0), Pt(10.0), Pt(100.0), Pt(50.0), "Hello");
         frame.content = "World".to_string();
-        frame.x = 20.0;
-        frame.y = 30.0;
+        frame.x = Pt(20.0);
+        frame.y = Pt(30.0);
 
         assert_eq!(frame.content, "World");
-        assert_eq!(frame.x, 20.0);
-        assert_eq!(frame.y, 30.0);
+        assert_eq!(frame.x, Pt(20.0));
+        assert_eq!(frame.y, Pt(30.0));
     }
 
     #[test]
     fn test_image_frame_creation() {
-        let frame = ImageFrame::new(10.0, 10.0, 200.0, 150.0, "/path/to/image.jpg");
-        assert_eq!(frame.x, 10.0);
-        assert_eq!(frame.width, 200.0);
-        assert_eq!(frame.height, 150.0);
+        let frame = ImageFrame::new(Pt(10.0), Pt(10.0), Pt(200.0), Pt(150.0), "/path/to/image.jpg");
+        assert_eq!(frame.x, Pt(10.0));
+        assert_eq!(frame.width, Pt(200.0));
+        assert_eq!(frame.height, Pt(150.0));
         assert_eq!(frame.asset_path, "/path/to/image.jpg");
     }
 
     #[test]
     fn test_image_frame_mutation() {
-        let mut frame = ImageFrame::new(10.0, 10.0, 200.0, 150.0, "/path/to/image.jpg");
+        let mut frame = ImageFrame::new(Pt(10.0), Pt(10.0), Pt(200.0), Pt(150.0), "/path/to/image.jpg");
         frame.asset_path = "/new/path/image.png".to_string();
-        frame.width = 300.0;
+        frame.width = Pt(300.0);
 
         assert_eq!(frame.asset_path, "/new/path/image.png");
-        assert_eq!(frame.width, 300.0);
+        assert_eq!(frame.width, Pt(300.0));
     }
 
     #[test]
     fn test_shape_frame_creation() {
-        let frame = ShapeFrame::new(50.0, 50.0, 100.0, 100.0, ShapeType::Rectangle);
-        assert_eq!(frame.x, 50.0);
+        let frame = ShapeFrame::new(Pt(50.0), Pt(50.0), Pt(100.0), Pt(100.0), ShapeType::Rectangle);
+        assert_eq!(frame.x, Pt(50.0));
         assert_eq!(frame.shape_type, ShapeType::Rectangle);
     }
 
     #[test]
     fn test_shape_frame_ellipse() {
-        let frame = ShapeFrame::new(0.0, 0.0, 50.0, 75.0, ShapeType::Ellipse);
-        assert_eq!(frame.width, 50.0);
-        assert_eq!(frame.height, 75.0);
+        let frame = ShapeFrame::new(Pt(0.0), Pt(0.0), Pt(50.0), Pt(75.0), ShapeType::Ellipse);
+        assert_eq!(frame.width, Pt(50.0));
+        assert_eq!(frame.height, Pt(75.0));
     }
 
     #[test]
     fn test_shape_frame_path() {
         let path_data = "M10 10 L90 90".to_string();
-        let frame = ShapeFrame::new(0.0, 0.0, 100.0, 100.0, ShapeType::Path(path_data.clone()));
+        let frame = ShapeFrame::new(Pt(0.0), Pt(0.0), Pt(100.0), Pt(100.0), ShapeType::Path(path_data.clone()));
         if let ShapeType::Path(p) = frame.shape_type {
             assert_eq!(p, path_data);
         } else {
@@ -491,21 +488,21 @@ mod tests {
     fn test_styles_defaults() {
         let style = ParagraphStyle::default();
         assert_eq!(style.name, "Basic Paragraph");
-        assert_eq!(style.font_size, 12.0);
+        assert_eq!(style.font_size, Pt(12.0));
         assert_eq!(style.alignment, TextAlignment::Left);
         assert_eq!(style.font_family, "Inter");
-        assert_eq!(style.leading, 14.4);
+        assert_eq!(style.leading, Pt(14.4));
         assert_eq!(style.tracking, 0.0);
     }
 
     #[test]
     fn test_paragraph_style_mutation() {
         let mut style = ParagraphStyle::default();
-        style.font_size = 16.0;
-        style.leading = 19.2;
+        style.font_size = Pt(16.0);
+        style.leading = Pt(19.2);
         style.alignment = TextAlignment::Center;
 
-        assert_eq!(style.font_size, 16.0);
+        assert_eq!(style.font_size, Pt(16.0));
         assert_eq!(style.alignment, TextAlignment::Center);
     }
 
@@ -516,13 +513,13 @@ mod tests {
             based_on: Some("Basic".to_string()),
             font_family: Some("Georgia".to_string()),
             font_style: Some("Italic".to_string()),
-            font_size: Some(14.0),
+            font_size: Some(Pt(14.0)),
             leading: None,
             tracking: Some(0.5),
             color_swatch: Some("Red".to_string()),
         };
         assert_eq!(style.name, "Emphasis");
-        assert_eq!(style.font_size, Some(14.0));
+        assert_eq!(style.font_size, Some(Pt(14.0)));
     }
 
     #[test]
@@ -531,29 +528,29 @@ mod tests {
             name: "Shadow Box".to_string(),
             fill_color: Some("Black".to_string()),
             stroke_color: Some("White".to_string()),
-            stroke_width: Some(2.0),
+            stroke_width: Some(Pt(2.0)),
         };
         assert_eq!(style.name, "Shadow Box");
-        assert_eq!(style.stroke_width, Some(2.0));
+        assert_eq!(style.stroke_width, Some(Pt(2.0)));
     }
 
     #[test]
     fn test_indents_creation() {
         let indents = Indents {
-            left: 36.0,
-            right: 36.0,
-            first_line: 18.0,
+            left: Pt(36.0),
+            right: Pt(36.0),
+            first_line: Pt(18.0),
         };
-        assert_eq!(indents.left, 36.0);
-        assert_eq!(indents.first_line, 18.0);
+        assert_eq!(indents.left, Pt(36.0));
+        assert_eq!(indents.first_line, Pt(18.0));
     }
 
     #[test]
     fn test_indents_default() {
         let indents = Indents::default();
-        assert_eq!(indents.left, 0.0);
-        assert_eq!(indents.right, 0.0);
-        assert_eq!(indents.first_line, 0.0);
+        assert_eq!(indents.left, Pt(0.0));
+        assert_eq!(indents.right, Pt(0.0));
+        assert_eq!(indents.first_line, Pt(0.0));
     }
 
     // ===== Color Tests =====
@@ -602,6 +599,13 @@ mod tests {
         assert_eq!(swatch.name, "Primary Blue");
     }
 
+    #[test]
+    fn test_frame_creation() {
+        let frame = TextFrame::new(Pt(10.0), Pt(10.0), Pt(100.0), Pt(50.0), "Hello World");
+        assert_eq!(frame.content, "Hello World");
+        assert_eq!(frame.width, Pt(100.0));
+    }
+
     // ===== JSON Serialization Tests =====
     #[test]
     fn test_document_serialize_deserialize() {
@@ -615,10 +619,10 @@ mod tests {
                 dpi: 300,
                 default_unit: Unit::Millimeter,
                 default_bleed: Bleed {
-                    top: 5.0,
-                    bottom: 5.0,
-                    inside: 5.0,
-                    outside: 5.0,
+                    top: Pt(5.0),
+                    bottom: Pt(5.0),
+                    inside: Pt(5.0),
+                    outside: Pt(5.0),
                 },
                 color_profile: "sRGB".to_string(),
             },
@@ -642,13 +646,13 @@ mod tests {
 
     #[test]
     fn test_frame_serialize_deserialize() {
-        let frame = Frame::Text(TextFrame::new(10.0, 20.0, 100.0, 50.0, "Test content"));
+        let frame = Frame::Text(TextFrame::new(Pt(10.0), Pt(20.0), Pt(100.0), Pt(50.0), "Test content"));
         let json = serde_json::to_string(&frame).expect("Serialization failed");
         let deserialized: Frame = serde_json::from_str(&json).expect("Deserialization failed");
 
         match deserialized {
             Frame::Text(f) => {
-                assert_eq!(f.x, 10.0);
+                assert_eq!(f.x, Pt(10.0));
                 assert_eq!(f.content, "Test content");
             }
             _ => panic!("Expected Text frame"),
@@ -663,17 +667,17 @@ mod tests {
             next_style: None,
             font_family: "Arial".to_string(),
             font_style: "Bold".to_string(),
-            font_size: 16.0,
-            leading: 19.2,
+            font_size: Pt(16.0),
+            leading: Pt(19.2),
             tracking: 0.1,
             alignment: TextAlignment::Justify,
             indents: Indents {
-                left: 36.0,
-                right: 36.0,
-                first_line: 18.0,
+                left: Pt(36.0),
+                right: Pt(36.0),
+                first_line: Pt(18.0),
             },
-            space_before: 12.0,
-            space_after: 12.0,
+            space_before: Pt(12.0),
+            space_after: Pt(12.0),
             color_swatch: Some("Black".to_string()),
         };
 
@@ -713,7 +717,7 @@ mod tests {
                     based_on: None,
                     font_family: Some("Georgia".to_string()),
                     font_style: Some("Italic".to_string()),
-                    font_size: Some(14.0),
+                    font_size: Some(Pt(14.0)),
                     leading: None,
                     tracking: None,
                     color_swatch: None,
@@ -732,17 +736,17 @@ mod tests {
     #[test]
     fn test_page_serialize_deserialize() {
         let page = Page {
-            width: 595.0,
-            height: 842.0,
+            width: Pt(595.0),
+            height: Pt(842.0),
             margins: Margins {
-                top: 36.0,
-                bottom: 36.0,
-                inside: 36.0,
-                outside: 36.0,
+                top: Pt(36.0),
+                bottom: Pt(36.0),
+                inside: Pt(36.0),
+                outside: Pt(36.0),
             },
             frames: vec![
-                Frame::Text(TextFrame::new(50.0, 50.0, 200.0, 100.0, "Hello")),
-                Frame::Shape(ShapeFrame::new(300.0, 300.0, 50.0, 50.0, ShapeType::Rectangle)),
+                Frame::Text(TextFrame::new(Pt(50.0), Pt(50.0), Pt(200.0), Pt(100.0), "Hello")),
+                Frame::Shape(ShapeFrame::new(Pt(300.0), Pt(300.0), Pt(50.0), Pt(50.0), ShapeType::Rectangle)),
             ],
         };
 
