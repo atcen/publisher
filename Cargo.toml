@@ -9,6 +9,7 @@ members = [
     "crates/export-epub",
     "crates/collab",
     "backend",
+    "apps/cli",
 ]
 
 [workspace.package]
