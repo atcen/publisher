@@ -1,0 +1,54 @@
+name: Issue Prioritizer
+
+on:
+  issues:
+    types: [opened, edited, reopened]
+
+jobs:
+  prioritize:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Run Claude (prioritizer)
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            You are a technical project manager for Publisher — an open-source, print-first desktop publishing app (InDesign alternative) built in Rust with Tauri + Svelte.
+
+            A new or updated issue needs a priority label. Read the issue:
+
+            gh issue view ${{ github.event.issue.number }} --json number,title,body,labels
+
+            Then read CLAUDE.md to understand the architecture and constraints.
+
+            Assign exactly ONE priority label based on these rules:
+
+            **p1** — Foundational: blocks large parts of the app from working at all.
+            Examples: core data model, CRDT layer, renderer, file I/O, CI infrastructure, undo/redo.
+
+            **p2** — Core feature: directly implements a primary user-facing capability.
+            Examples: text/image frames, typography engine, color management, basic editing tools.
+
+            **p3** — Important but not blocking: enhances an existing feature, improves UX, or is needed for completeness.
+            Examples: advanced text features, guides, layers panel, find/replace, export dialog.
+
+            **p4** — Nice to have: low urgency, can wait until the app is otherwise functional.
+            Examples: Google Fonts, stock images, grid presets, GREP, auto-save, preferences.
+
+            Rules:
+            - Remove any existing p1/p2/p3/p4 label before adding the new one
+            - Use: gh issue edit ${{ github.event.issue.number }} --remove-label "p1,p2,p3,p4" --add-label "<chosen>"
+            - Do NOT change any other labels
+            - Do NOT comment on the issue
+            - If the issue is already closed, do nothing
+          claude_args: >
+            --model claude-haiku-4-5-20251001
+            --max-turns 10

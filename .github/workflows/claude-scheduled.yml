@@ -32,12 +32,22 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Take the oldest open issue that is not currently in-progress
+          # Pick highest priority open issue (p1 > p2 > p3 > p4 > unlabelled), then lowest number
           ISSUE=$(gh issue list \
             --state open \
-            --limit 50 \
+            --limit 100 \
             --json number,title,labels \
-            | jq '[.[] | select(.labels | map(.name) | contains(["in-progress"]) | not)] | first')
+            | jq '
+              def priority:
+                .labels | map(.name) |
+                if contains(["p1"]) then 1
+                elif contains(["p2"]) then 2
+                elif contains(["p3"]) then 3
+                elif contains(["p4"]) then 4
+                else 5 end;
+              [.[] | select(.labels | map(.name) | contains(["in-progress"]) | not)]
+              | sort_by([priority, .number])
+              | first')
 
           NUMBER=$(echo "$ISSUE" | jq -r '.number // empty')
           TITLE=$(echo "$ISSUE"  | jq -r '.title  // empty')
