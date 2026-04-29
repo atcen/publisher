@@ -3,10 +3,7 @@ pub mod paper;
 pub mod builder;
 
 use serde::{Deserialize, Serialize};
-use crate::units::Unit;
-
-/// Native units in points (pt). 1 pt = 1/72 inch.
-pub type Pt = f64;
+pub use crate::units::{Unit, Pt};
 
 pub fn init() {
     // Placeholder for core initialization
@@ -164,9 +161,9 @@ pub enum Color {
 impl Default for Indents {
     fn default() -> Self {
         Self {
-            left: 0.0,
-            right: 0.0,
-            first_line: 0.0,
+            left: Pt(0.0),
+            right: Pt(0.0),
+            first_line: Pt(0.0),
         }
     }
 }
@@ -179,13 +176,13 @@ impl Default for ParagraphStyle {
             next_style: None,
             font_family: "Inter".to_string(),
             font_style: "Regular".to_string(),
-            font_size: 12.0,
-            leading: 14.4,
+            font_size: Pt(12.0),
+            leading: Pt(14.4),
             tracking: 0.0,
             alignment: TextAlignment::Left,
             indents: Indents::default(),
-            space_before: 0.0,
-            space_after: 0.0,
+            space_before: Pt(0.0),
+            space_after: Pt(0.0),
             color_swatch: None,
         }
     }
@@ -298,10 +295,10 @@ mod tests {
                 dpi: 300,
                 default_unit: Unit::Point,
                 default_bleed: Bleed {
-                    top: 0.0,
-                    bottom: 0.0,
-                    inside: 0.0,
-                    outside: 0.0,
+                    top: Pt(0.0),
+                    bottom: Pt(0.0),
+                    inside: Pt(0.0),
+                    outside: Pt(0.0),
                 },
                 color_profile: "sRGB".to_string(),
             },
@@ -491,7 +488,7 @@ mod tests {
     fn test_styles_defaults() {
         let style = ParagraphStyle::default();
         assert_eq!(style.name, "Basic Paragraph");
-        assert_eq!(style.font_size, 12.0);
+        assert_eq!(style.font_size, Pt(12.0));
         assert_eq!(style.alignment, TextAlignment::Left);
         assert_eq!(style.font_family, "Inter");
         assert_eq!(style.leading, 14.4);
@@ -602,6 +599,13 @@ mod tests {
         assert_eq!(swatch.name, "Primary Blue");
     }
 
+    #[test]
+    fn test_frame_creation() {
+        let frame = TextFrame::new(Pt(10.0), Pt(10.0), Pt(100.0), Pt(50.0), "Hello World");
+        assert_eq!(frame.content, "Hello World");
+        assert_eq!(frame.width, Pt(100.0));
+    }
+
     // ===== JSON Serialization Tests =====
     #[test]
     fn test_document_serialize_deserialize() {
@@ -615,10 +619,10 @@ mod tests {
                 dpi: 300,
                 default_unit: Unit::Millimeter,
                 default_bleed: Bleed {
-                    top: 5.0,
-                    bottom: 5.0,
-                    inside: 5.0,
-                    outside: 5.0,
+                    top: Pt(5.0),
+                    bottom: Pt(5.0),
+                    inside: Pt(5.0),
+                    outside: Pt(5.0),
                 },
                 color_profile: "sRGB".to_string(),
             },
@@ -642,13 +646,13 @@ mod tests {
 
     #[test]
     fn test_frame_serialize_deserialize() {
-        let frame = Frame::Text(TextFrame::new(10.0, 20.0, 100.0, 50.0, "Test content"));
+        let frame = Frame::Text(TextFrame::new(Pt(10.0), Pt(20.0), Pt(100.0), Pt(50.0), "Test content"));
         let json = serde_json::to_string(&frame).expect("Serialization failed");
         let deserialized: Frame = serde_json::from_str(&json).expect("Deserialization failed");
 
         match deserialized {
             Frame::Text(f) => {
-                assert_eq!(f.x, 10.0);
+                assert_eq!(f.x, Pt(10.0));
                 assert_eq!(f.content, "Test content");
             }
             _ => panic!("Expected Text frame"),
@@ -663,17 +667,17 @@ mod tests {
             next_style: None,
             font_family: "Arial".to_string(),
             font_style: "Bold".to_string(),
-            font_size: 16.0,
-            leading: 19.2,
+            font_size: Pt(16.0),
+            leading: Pt(19.2),
             tracking: 0.1,
             alignment: TextAlignment::Justify,
             indents: Indents {
-                left: 36.0,
-                right: 36.0,
-                first_line: 18.0,
+                left: Pt(36.0),
+                right: Pt(36.0),
+                first_line: Pt(18.0),
             },
-            space_before: 12.0,
-            space_after: 12.0,
+            space_before: Pt(12.0),
+            space_after: Pt(12.0),
             color_swatch: Some("Black".to_string()),
         };
 
@@ -713,7 +717,7 @@ mod tests {
                     based_on: None,
                     font_family: Some("Georgia".to_string()),
                     font_style: Some("Italic".to_string()),
-                    font_size: Some(14.0),
+                    font_size: Some(Pt(14.0)),
                     leading: None,
                     tracking: None,
                     color_swatch: None,
@@ -732,17 +736,17 @@ mod tests {
     #[test]
     fn test_page_serialize_deserialize() {
         let page = Page {
-            width: 595.0,
-            height: 842.0,
+            width: Pt(595.0),
+            height: Pt(842.0),
             margins: Margins {
-                top: 36.0,
-                bottom: 36.0,
-                inside: 36.0,
-                outside: 36.0,
+                top: Pt(36.0),
+                bottom: Pt(36.0),
+                inside: Pt(36.0),
+                outside: Pt(36.0),
             },
             frames: vec![
-                Frame::Text(TextFrame::new(50.0, 50.0, 200.0, 100.0, "Hello")),
-                Frame::Shape(ShapeFrame::new(300.0, 300.0, 50.0, 50.0, ShapeType::Rectangle)),
+                Frame::Text(TextFrame::new(Pt(50.0), Pt(50.0), Pt(200.0), Pt(100.0), "Hello")),
+                Frame::Shape(ShapeFrame::new(Pt(300.0), Pt(300.0), Pt(50.0), Pt(50.0), ShapeType::Rectangle)),
             ],
         };
 

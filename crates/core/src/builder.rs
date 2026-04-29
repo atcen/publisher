@@ -35,10 +35,10 @@ impl DocumentBuilder {
                 outside: Unit::Millimeter.to_points(12.7, None),
             },
             bleed: Bleed {
-                top: 0.0,
-                bottom: 0.0,
-                inside: 0.0,
-                outside: 0.0,
+                top: crate::Pt(0.0),
+                bottom: crate::Pt(0.0),
+                inside: crate::Pt(0.0),
+                outside: crate::Pt(0.0),
             },
             color_profile: "sRGB".to_string(),
         }
