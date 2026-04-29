@@ -84,11 +84,14 @@ jobs:
       - name: Install Svelte dependencies
         run: npm install --prefix apps/web
 
+      - name: Set PKG_CONFIG_PATH (Linux only)
+        if: runner.os == 'Linux'
+        run: echo "PKG_CONFIG_PATH=/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/lib/pkgconfig:/usr/share/pkgconfig" >> $GITHUB_ENV
+
       - name: Build Desktop App Bundles
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PKG_CONFIG_PATH: /usr/lib/x86_64-linux-gnu/pkgconfig:/usr/lib/pkgconfig:/usr/share/pkgconfig
         with:
           args: "--target ${{ matrix.target }}"
           projectPath: "apps/desktop"
