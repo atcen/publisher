@@ -7,6 +7,8 @@ on:
 jobs:
   prioritize:
     runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     permissions:
       issues: write
       contents: read
@@ -43,12 +45,15 @@ jobs:
             **p4** — Nice to have: low urgency, can wait until the app is otherwise functional.
             Examples: Google Fonts, stock images, grid presets, GREP, auto-save, preferences.
 
-            Rules:
-            - Remove any existing p1/p2/p3/p4 label before adding the new one
-            - Use: gh issue edit ${{ github.event.issue.number }} --remove-label "p1,p2,p3,p4" --add-label "<chosen>"
-            - Do NOT change any other labels
+            Rules — follow exactly, no exceptions:
+            - Run ONLY these two commands, nothing else:
+              1. gh issue edit ${{ github.event.issue.number }} --remove-label "p1,p2,p3,p4"
+              2. gh issue edit ${{ github.event.issue.number }} --add-label "<chosen>"
             - Do NOT comment on the issue
-            - If the issue is already closed, do nothing
+            - Do NOT create or edit pull requests
+            - Do NOT push any code
+            - Do NOT use any tool other than reading files and running gh issue commands
+            - If the issue is already closed, do nothing at all
           claude_args: >
             --model claude-haiku-4-5-20251001
             --max-turns 10
