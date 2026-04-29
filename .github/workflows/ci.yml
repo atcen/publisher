@@ -81,8 +81,9 @@ jobs:
         with:
           key: ${{ matrix.target }}
 
-      - name: Install Svelte dependencies
-        run: npm install --prefix apps/web
+      - name: Install dependencies
+        run: |
+          npm install --prefix apps/web
 
       - name: Set PKG_CONFIG_PATH (Linux only)
         if: runner.os == 'Linux'
