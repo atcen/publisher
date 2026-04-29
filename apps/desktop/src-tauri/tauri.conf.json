@@ -1,12 +1,12 @@
 {
   "productName": "Publisher",
   "version": "0.1.0",
-  "identifier": "com.publisher.app",
+  "identifier": "com.publisher.desktop",
   "build": {
     "beforeDevCommand": "npm --prefix ../../apps/web run dev",
     "devUrl": "http://localhost:5173",
     "beforeBuildCommand": "npm --prefix ../../apps/web run build",
-    "frontendDist": "../../apps/web/dist"
+    "frontendDist": "../../web/dist"
   },
   "app": {
     "windows": [
@@ -24,11 +24,12 @@
     "active": true,
     "targets": ["deb", "rpm", "appimage", "nsis", "dmg"],
     "icon": [
-      "icons/icon.png"
+      "icons/icon.png",
+      "icons/icon.icns"
     ],
     "externalBin": [],
     "copyright": "",
-    "category": "Office",
+    "category": "public.app-category.graphics-design",
     "shortDescription": "Modern desktop publishing",
     "longDescription": "Professional print-first desktop publishing application.",
     "macOS": {
