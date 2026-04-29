@@ -100,25 +100,25 @@ jobs:
             - If all criteria are met and no blocking issues: approve the PR.
 
   build-artifacts:
-    name: Build (${{ matrix.target }})
+    name: Build (${{ matrix.name }})
     needs: test
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     strategy:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-            artifact-name: publisher-linux-x86_64
-          - os: macos-latest
-            target: x86_64-apple-darwin
-            artifact-name: publisher-macos-x86_64
-          - os: macos-latest
+          - name: macOS Apple Silicon
+            os: macos-latest
             target: aarch64-apple-darwin
-            artifact-name: publisher-macos-aarch64
-          - os: windows-latest
+            artifact-name: Publisher-macos-arm64
+          - name: Windows x64
+            os: windows-latest
             target: x86_64-pc-windows-msvc
-            artifact-name: publisher-windows-x86_64
+            artifact-name: Publisher-windows-x64
+          - name: Linux x64
+            os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact-name: Publisher-linux-x64
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -136,34 +136,76 @@ jobs:
       - name: Build release binary
         run: cargo build --release --target ${{ matrix.target }} --package publisher-cli
 
-      - name: Collect artifacts (Unix)
-        if: runner.os != 'Windows'
+      - name: Package — macOS DMG
+        if: runner.os == 'macOS'
         run: |
-          mkdir dist
-          cp target/${{ matrix.target }}/release/publisher-cli dist/
-          tar -czf ${{ matrix.artifact-name }}.tar.gz -C dist .
+          BINARY="target/${{ matrix.target }}/release/publisher-cli"
 
-      - name: Collect artifacts (Windows)
+          # .app bundle structure
+          mkdir -p "Publisher.app/Contents/MacOS"
+          cp "$BINARY" "Publisher.app/Contents/MacOS/Publisher"
+          cat > "Publisher.app/Contents/Info.plist" << 'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>CFBundleExecutable</key><string>Publisher</string>
+            <key>CFBundleIdentifier</key><string>com.atcen.publisher</string>
+            <key>CFBundleName</key><string>Publisher</string>
+            <key>CFBundleVersion</key><string>0.1.0</string>
+            <key>CFBundleShortVersionString</key><string>0.1.0</string>
+            <key>CFBundlePackageType</key><string>APPL</string>
+            <key>LSMinimumSystemVersion</key><string>13.0</string>
+            <key>LSArchitecturePriority</key><array><string>arm64</string></array>
+          </dict>
+          </plist>
+          PLIST
+
+          # DMG
+          hdiutil create \
+            -volname "Publisher" \
+            -srcfolder "Publisher.app" \
+            -ov -format UDZO \
+            "${{ matrix.artifact-name }}.dmg"
+
+      - name: Package — Windows ZIP
         if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $src = "target\${{ matrix.target }}\release\publisher-cli.exe"
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Copy-Item $src dist\Publisher.exe
+          Compress-Archive -Path dist\Publisher.exe -DestinationPath "${{ matrix.artifact-name }}.zip"
+
+      - name: Package — Linux tar.gz
+        if: runner.os == 'Linux'
         run: |
           mkdir dist
-          cp target/${{ matrix.target }}/release/publisher-cli.exe dist/
-          Compress-Archive -Path dist\* -DestinationPath ${{ matrix.artifact-name }}.zip
+          cp "target/${{ matrix.target }}/release/publisher-cli" dist/publisher
+          tar -czf "${{ matrix.artifact-name }}.tar.gz" -C dist publisher
 
-      - name: Upload artifact (Unix)
-        if: runner.os != 'Windows'
+      - name: Upload artifact — macOS
+        if: runner.os == 'macOS'
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact-name }}
-          path: ${{ matrix.artifact-name }}.tar.gz
+          path: ${{ matrix.artifact-name }}.dmg
           retention-days: 14
 
-      - name: Upload artifact (Windows)
+      - name: Upload artifact — Windows
         if: runner.os == 'Windows'
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact-name }}
           path: ${{ matrix.artifact-name }}.zip
+          retention-days: 14
+
+      - name: Upload artifact — Linux
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact-name }}
+          path: ${{ matrix.artifact-name }}.tar.gz
           retention-days: 14
 
   release-nightly:
