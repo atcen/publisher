@@ -156,12 +156,16 @@ jobs:
         run: |
           TAG="nightly"
 
-          # Find and upload all built artifacts (recursive search for bundle files)
-          find release-files -type f \( -name "*.dmg" -o -name "*.msi" -o -name "*.deb" -o -name "*.rpm" -o -name "*.AppImage" \) -print | while read file; do
+          echo "=== Contents of release-files directory ==="
+          find release-files -type f | sort
+          echo ""
+
+          # Upload all installer files to the release
+          echo "=== Uploading artifacts to release ==="
+          count=0
+          find release-files -type f \( -name "*.dmg" -o -name "*.msi" -o -name "*.deb" -o -name "*.rpm" -o -name "*.AppImage" \) | while read file; do
             echo "Uploading: $file"
             gh release upload "$TAG" "$file" --clobber
+            ((count++))
           done
-
-          # Debug: Show what was found
-          echo "Files in release-files:"
-          find release-files -type f | head -20
+          echo "Uploaded $count files"
