@@ -40,7 +40,7 @@ jobs:
   build-artifacts:
     name: Build (${{ matrix.name }})
     needs: test
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
     strategy:
       fail-fast: false
       matrix:
@@ -84,6 +84,7 @@ jobs:
       - name: Install dependencies
         run: |
           npm install --prefix apps/web
+          npm install --prefix apps/desktop
 
       - name: Set PKG_CONFIG_PATH (Linux only)
         if: runner.os == 'Linux'
