@@ -41,23 +41,28 @@ impl VelloRenderer {
         document: &Document,
         spread_index: usize,
         zoom: f64,
-    ) {
+    ) -> bool {
+        // Early return if spread_index is out of bounds (don't update stats for invalid renders)
+        if spread_index >= document.spreads.len() {
+            return false;
+        }
+
         let start = Instant::now();
         self.scene.reset();
 
-        if spread_index < document.spreads.len() {
-            if let Some(spread) = document.spreads.get(spread_index) {
-                let mut x_offset = 0.0;
-                for page in &spread.pages {
-                    self.render_page(page, zoom, x_offset);
-                    x_offset += page.width.0 * zoom + 10.0; // 10pt gutter between pages
-                }
+        if let Some(spread) = document.spreads.get(spread_index) {
+            let mut x_offset = 0.0;
+            let gutter = 10.0 * zoom; // Gutter in points, scaled with zoom
+            for page in &spread.pages {
+                self.render_page(page, zoom, x_offset);
+                x_offset += page.width.0 * zoom + gutter;
             }
         }
 
         self.last_render_time = start.elapsed();
         self.frame_count = self.frame_count.saturating_add(1);
         self.total_render_time += self.last_render_time;
+        true
     }
 
     fn render_page(&mut self, page: &Page, zoom: f64, x_offset: f64) {
@@ -144,21 +149,34 @@ impl VelloRenderer {
                 );
             }
             ShapeType::Ellipse => {
-                let cx = x + width / 2.0;
-                let cy = y + height / 2.0;
-                let rx = width / 2.0;
-                let ry = height / 2.0;
+                // Guard against zero-sized ellipses to avoid divide-by-zero
+                if width > 0.0 && height > 0.0 {
+                    let cx = x + width / 2.0;
+                    let cy = y + height / 2.0;
+                    let rx = width / 2.0;
+                    let ry = height / 2.0;
 
-                // Use ellipse via scaled circle to respect both width and height
-                let ellipse = Circle::new(Point::new(cx, cy), rx.max(ry));
-                let transform = Affine::new([rx / rx.max(ry), 0.0, 0.0, ry / rx.max(ry), cx * (1.0 - rx / rx.max(ry)), cy * (1.0 - ry / rx.max(ry))]);
-                self.scene.fill(
-                    Fill::NonZero,
-                    transform,
-                    Color::rgb8(150, 150, 150),
-                    None,
-                    &ellipse,
-                );
+                    // Use ellipse via scaled circle to respect both width and height
+                    let max_r = rx.max(ry);
+                    let ellipse = Circle::new(Point::new(cx, cy), max_r);
+                    let sx = rx / max_r;
+                    let sy = ry / max_r;
+                    let transform = Affine::new([
+                        sx,
+                        0.0,
+                        0.0,
+                        sy,
+                        cx * (1.0 - sx),
+                        cy * (1.0 - sy),
+                    ]);
+                    self.scene.fill(
+                        Fill::NonZero,
+                        transform,
+                        Color::rgb8(150, 150, 150),
+                        None,
+                        &ellipse,
+                    );
+                }
             }
             ShapeType::Path(_svg_path) => {
                 // TODO: Parse and render SVG path data
@@ -308,9 +326,10 @@ mod tests {
             spreads: vec![spread],
         };
 
-        renderer.render_document(&doc, 0, 1.0);
-        // Verify render completed
-        assert_eq!(renderer.frame_count, 1, "Should have rendered 1 frame");
+        let rendered = renderer.render_document(&doc, 0, 1.0);
+        // Verify render completed successfully
+        assert!(rendered, "render_document should return true for valid spread_index");
+        assert_eq!(renderer.frame_count, 1, "frame_count tracks completed render_document calls");
     }
 
     #[test]
@@ -360,9 +379,10 @@ mod tests {
             spreads: vec![spread],
         };
 
-        renderer.render_document(&doc, 0, 1.0);
-        // Verify render completed
-        assert_eq!(renderer.frame_count, 1, "Should have rendered 1 frame");
+        let rendered = renderer.render_document(&doc, 0, 1.0);
+        // Verify render completed successfully
+        assert!(rendered, "render_document should return true for valid spread_index");
+        assert_eq!(renderer.frame_count, 1, "frame_count tracks completed render_document calls");
     }
 
     #[test]
@@ -431,16 +451,15 @@ mod tests {
     }
 
     #[test]
-    fn test_vello_renderer_initialization() {
-        // Verify renderer initializes correctly with Vello's antialiasing configuration
+    fn test_renderer_can_initialize_without_device() {
+        // Verify renderer can be constructed without a wgpu device (for testing)
         let renderer = VelloRenderer::new(None).expect("Failed to create renderer");
 
-        // Renderer is configured with AaSupport::all() for sub-pixel accuracy
-        // (This is set in RendererOptions during VelloRenderer::new)
-        assert_eq!(renderer.frame_count, 0, "New renderer should have 0 frames rendered");
+        // New renderer should start with no renders tracked
+        assert_eq!(renderer.frame_count, 0, "New renderer should start with frame_count=0");
+        assert!(renderer.renderer.is_none(), "Device-less renderer should have renderer=None");
 
-        // NOTE: Actual text rendering with sub-pixel accuracy is tracked in issue #71
-        // Currently text frames render as placeholders; sub-pixel accuracy will be
-        // validated once typography crate integration is complete
+        // NOTE: Verifying RendererOptions (AaSupport::all()) requires a real wgpu::Device
+        // and would belong in an integration test with actual GPU rendering.
     }
 }
