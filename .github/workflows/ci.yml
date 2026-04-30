@@ -156,16 +156,28 @@ jobs:
         run: |
           TAG="nightly"
 
-          echo "=== Contents of release-files directory ==="
-          find release-files -type f | sort
+          echo "=== Listing all files in release-files ==="
+          ls -lR release-files/ || echo "release-files directory not found"
           echo ""
 
-          # Upload all installer files to the release
-          echo "=== Uploading artifacts to release ==="
-          count=0
-          find release-files -type f \( -name "*.dmg" -o -name "*.msi" -o -name "*.deb" -o -name "*.rpm" -o -name "*.AppImage" \) | while read file; do
+          echo "=== Finding installer files ==="
+          installer_files=$(find release-files -type f \( -name "*.dmg" -o -name "*.msi" -o -name "*.deb" -o -name "*.rpm" -o -name "*.AppImage" \) 2>&1)
+          echo "Found files:"
+          echo "$installer_files"
+          echo ""
+
+          if [ -z "$installer_files" ]; then
+            echo "ERROR: No installer files found!"
+            exit 1
+          fi
+
+          echo "=== Uploading to release ==="
+          echo "$installer_files" | while IFS= read -r file; do
             echo "Uploading: $file"
-            gh release upload "$TAG" "$file" --clobber
-            ((count++))
+            if gh release upload "$TAG" "$file" --clobber 2>&1; then
+              echo "✓ Upload successful"
+            else
+              echo "✗ Upload failed for $file"
+              exit 1
+            fi
           done
-          echo "Uploaded $count files"
