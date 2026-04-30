@@ -111,9 +111,41 @@ jobs:
           if-no-files-found: ignore
           retention-days: 1
 
+  build-flatpak:
+    name: Build Flatpak
+    needs: test
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Flatpak build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flatpak flatpak-builder
+
+      - name: Add Flathub remote
+        run: flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+
+      - name: Build Flatpak
+        run: |
+          flatpak-builder --repo=repo --force-clean build-dir apps/desktop/com.publisher.app.yml
+
+      - name: Create Flatpak bundle
+        run: |
+          flatpak build-bundle repo publisher.flatpak com.publisher.app
+
+      - name: Upload Flatpak artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: artifacts-flatpak
+          path: publisher.flatpak
+          if-no-files-found: ignore
+          retention-days: 1
+
   release-nightly:
     name: Publish Nightly Release
-    needs: build-artifacts
+    needs: [build-artifacts, build-flatpak]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
@@ -162,7 +194,7 @@ jobs:
           TAG="nightly"
 
           # Find and upload all built artifacts
-          find release-files -type f \( -name "*.dmg" -o -name "*.msi" -o -name "*.deb" -o -name "*.rpm" -o -name "*.AppImage" \) | while read file; do
+          find release-files -type f \( -name "*.dmg" -o -name "*.msi" -o -name "*.deb" -o -name "*.rpm" -o -name "*.AppImage" -o -name "*.flatpak" \) | while read file; do
             echo "Uploading: $file"
             gh release upload "$TAG" "$file" --clobber
           done
