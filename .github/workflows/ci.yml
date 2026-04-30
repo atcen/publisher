@@ -103,12 +103,12 @@ jobs:
         with:
           name: artifacts-${{ matrix.target }}
           path: |
-            apps/desktop/target/${{ matrix.target }}/release/bundle/dmg/*.dmg
-            apps/desktop/target/${{ matrix.target }}/release/bundle/msi/*.msi
-            apps/desktop/target/${{ matrix.target }}/release/bundle/deb/*.deb
-            apps/desktop/target/${{ matrix.target }}/release/bundle/rpm/*.rpm
-            apps/desktop/target/${{ matrix.target }}/release/bundle/appimage/*.AppImage
-          if-no-files-found: ignore
+            target/${{ matrix.target }}/release/bundle/dmg/*.dmg
+            target/${{ matrix.target }}/release/bundle/msi/*.msi
+            target/${{ matrix.target }}/release/bundle/deb/*.deb
+            target/${{ matrix.target }}/release/bundle/rpm/*.rpm
+            target/${{ matrix.target }}/release/bundle/appimage/*.AppImage
+          if-no-files-found: warn
           retention-days: 1
 
   release-nightly:
