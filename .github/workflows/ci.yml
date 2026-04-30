@@ -156,8 +156,12 @@ jobs:
         run: |
           TAG="nightly"
 
-          # Find and upload all built artifacts
-          find release-files -type f \( -name "*.dmg" -o -name "*.msi" -o -name "*.deb" -o -name "*.rpm" -o -name "*.AppImage" \) | while read file; do
+          # Find and upload all built artifacts (recursive search for bundle files)
+          find release-files -type f \( -name "*.dmg" -o -name "*.msi" -o -name "*.deb" -o -name "*.rpm" -o -name "*.AppImage" \) -print | while read file; do
             echo "Uploading: $file"
             gh release upload "$TAG" "$file" --clobber
           done
+
+          # Debug: Show what was found
+          echo "Files in release-files:"
+          find release-files -type f | head -20
