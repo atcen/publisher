@@ -159,12 +159,24 @@ fn bench_frame_cloning(c: &mut Criterion) {
     let mut group = c.benchmark_group("frame_cloning");
     group.sample_size(500);
 
-    let text_frame = Frame::Text(TextFrame::new(Pt(10.0), Pt(20.0), Pt(200.0), Pt(100.0), "Hello World"));
+    let text_frame = Frame::Text(TextFrame::new(
+        Pt(10.0),
+        Pt(20.0),
+        Pt(200.0),
+        Pt(100.0),
+        "Hello World",
+    ));
     group.bench_function("clone_text_frame", |b| {
         b.iter(|| black_box(black_box(&text_frame).clone()))
     });
 
-    let image_frame = Frame::Image(ImageFrame::new(Pt(10.0), Pt(20.0), Pt(300.0), Pt(150.0), "/path/image.jpg"));
+    let image_frame = Frame::Image(ImageFrame::new(
+        Pt(10.0),
+        Pt(20.0),
+        Pt(300.0),
+        Pt(150.0),
+        "/path/image.jpg",
+    ));
     group.bench_function("clone_image_frame", |b| {
         b.iter(|| black_box(black_box(&image_frame).clone()))
     });

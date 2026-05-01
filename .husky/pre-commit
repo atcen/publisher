@@ -1,0 +1,17 @@
+#!/bin/sh
+
+echo "🔍 Running local tests before commit..."
+
+# Run Rust tests
+echo "📝 Running cargo test..."
+cargo test --workspace || exit 1
+
+# Run clippy
+echo "🔍 Running clippy..."
+cargo clippy --workspace --all-targets -- -D warnings || exit 1
+
+# Run cargo fmt check
+echo "📐 Checking formatting..."
+cargo fmt --check || exit 1
+
+echo "✅ All checks passed!"
