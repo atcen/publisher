@@ -8,6 +8,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  APT_PACKAGES: libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev libgtk-3-dev libgdk-pixbuf2.0-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libcairo-dev libpango-1.0-0 libpangocairo-1.0-0 libxcb-dri3-dev libxdamage-dev
 
 concurrency:
   group: nightly-${{ github.ref }}
@@ -26,15 +27,15 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
       - name: APT cache (Linux)
         if: runner.os == 'Linux'
-        uses: awalsh128/cache-apt-pkgs-action@latest
+        uses: awalsh128/cache-apt-pkgs-action@v1
         with:
-          packages: libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev libgtk-3-dev libgdk-pixbuf2.0-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libcairo-dev libpango-1.0-0 libpangocairo-1.0-0 libxcb-dri3-dev libxdamage-dev
+          packages: ${{ env.APT_PACKAGES }}
           version: 1.0
           execute_install_scripts: true
       - name: Install dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
-          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev libgtk-3-dev libgdk-pixbuf2.0-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libcairo-dev libpango-1.0-0 libpangocairo-1.0-0 libxcb-dri3-dev libxdamage-dev
+          sudo apt-get install -y ${{ env.APT_PACKAGES }}
         env:
           PKG_CONFIG_PATH: /usr/lib/x86_64-linux-gnu/pkgconfig:/usr/lib/pkgconfig:/usr/share/pkgconfig
       - name: Rust Cache
@@ -51,23 +52,23 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
+      - name: Check formatting
+        run: cargo fmt --check
       - name: APT cache (Linux)
         if: runner.os == 'Linux'
-        uses: awalsh128/cache-apt-pkgs-action@latest
+        uses: awalsh128/cache-apt-pkgs-action@v1
         with:
-          packages: libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev libgtk-3-dev libgdk-pixbuf2.0-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libcairo-dev libpango-1.0-0 libpangocairo-1.0-0 libxcb-dri3-dev libxdamage-dev
+          packages: ${{ env.APT_PACKAGES }}
           version: 1.0
           execute_install_scripts: true
       - name: Install dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
-          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev libgtk-3-dev libgdk-pixbuf2.0-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libcairo-dev libpango-1.0-0 libpangocairo-1.0-0 libxcb-dri3-dev libxdamage-dev
+          sudo apt-get install -y ${{ env.APT_PACKAGES }}
         env:
           PKG_CONFIG_PATH: /usr/lib/x86_64-linux-gnu/pkgconfig:/usr/lib/pkgconfig:/usr/share/pkgconfig
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
-      - name: Check formatting
-        run: cargo fmt --check
       - name: Run clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
 
@@ -99,15 +100,15 @@ jobs:
 
       - name: APT cache (Linux)
         if: runner.os == 'Linux'
-        uses: awalsh128/cache-apt-pkgs-action@latest
+        uses: awalsh128/cache-apt-pkgs-action@v1
         with:
-          packages: libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev libgtk-3-dev libgdk-pixbuf2.0-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libcairo-dev libpango-1.0-0 libpangocairo-1.0-0 libxcb-dri3-dev libxdamage-dev
+          packages: ${{ env.APT_PACKAGES }}
           version: 1.0
           execute_install_scripts: true
       - name: Install dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
-          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev libgtk-3-dev libgdk-pixbuf2.0-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libcairo-dev libpango-1.0-0 libpangocairo-1.0-0 libxcb-dri3-dev libxdamage-dev
+          sudo apt-get install -y ${{ env.APT_PACKAGES }}
         env:
           PKG_CONFIG_PATH: /usr/lib/x86_64-linux-gnu/pkgconfig:/usr/lib/pkgconfig:/usr/share/pkgconfig
 
