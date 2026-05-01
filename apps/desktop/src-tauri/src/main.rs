@@ -9,6 +9,8 @@ use document_service::{DocumentService, DocumentServiceError};
 use publisher_core::DocumentState;
 use serde_json::json;
 use std::fs;
+use std::io::Write;
+use std::path::Path;
 use std::sync::Mutex;
 use tauri::Runtime;
 use tauri_plugin_dialog::DialogExt;
