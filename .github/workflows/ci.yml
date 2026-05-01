@@ -173,7 +173,7 @@ jobs:
           echo ""
 
           echo "=== Finding installer files ==="
-          mapfile -t installer_files < <(find release-files -type f \( -name "*.dmg" -o -name "*.msi" -o -name "*.deb" -o -name "*.rpm" -o -name "*.AppImage" \))
+          mapfile -t installer_files < <(find release-files -type f \( -name "*.dmg" -o -name "*.exe" -o -name "*.deb" -o -name "*.rpm" -o -name "*.AppImage" \))
           echo "Found ${#installer_files[@]} files:"
           printf '  %s\n' "${installer_files[@]}"
           echo ""
