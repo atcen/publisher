@@ -7,3 +7,5 @@ dist/
 .vite/
 *.log
 /apps/desktop/src-tauri/gen/
+/apps/web/test-results/
+/apps/web/playwright-report/

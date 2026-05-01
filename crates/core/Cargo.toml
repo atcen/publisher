@@ -6,7 +6,10 @@ license.workspace = true
 
 [dependencies]
 serde.workspace = true
+serde_json = "1.0"
 automerge.workspace = true
+uuid.workspace = true
+serde_bytes = "0.11"
 
 # For WASM builds: add js feature to UUID for JavaScript-based RNG
 # UUID is a transitive dependency of automerge; this configuration ensures
@@ -19,6 +22,7 @@ uuid = { workspace = true, features = ["js"] }
 [dev-dependencies]
 serde_json = "1.0"
 criterion = { version = "0.5", features = ["html_reports"] }
+tempfile = "3.8"
 
 [[bench]]
 name = "frame_allocation"

@@ -1,8 +1,14 @@
 pub mod builder;
+pub mod document_manager;
+pub mod document_state;
+pub mod history;
 pub mod paper;
+pub mod persistence;
 pub mod units;
 
 pub use crate::units::{Pt, Unit};
+pub use document_state::DocumentState;
+pub use history::{Action, History};
 use serde::{Deserialize, Serialize};
 
 pub fn init() {
@@ -290,7 +296,6 @@ impl Default for Styles {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json;
 
     // ===== Document Creation Tests =====
     #[test]
@@ -537,10 +542,12 @@ mod tests {
 
     #[test]
     fn test_paragraph_style_mutation() {
-        let mut style = ParagraphStyle::default();
-        style.font_size = Pt(16.0);
-        style.leading = Pt(19.2);
-        style.alignment = TextAlignment::Center;
+        let style = ParagraphStyle {
+            font_size: Pt(16.0),
+            leading: Pt(19.2),
+            alignment: TextAlignment::Center,
+            ..Default::default()
+        };
 
         assert_eq!(style.font_size, Pt(16.0));
         assert_eq!(style.alignment, TextAlignment::Center);

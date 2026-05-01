@@ -6,19 +6,14 @@ pub const POINTS_PER_INCH: f64 = 72.0;
 pub const MM_PER_INCH: f64 = 25.4;
 pub const CM_PER_INCH: f64 = 2.54;
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
 pub enum Unit {
-    Point,      // pt (1/72 inch)
+    #[default]
+    Point, // pt (1/72 inch)
     Millimeter, // mm
     Centimeter, // cm
     Inch,       // in
     Pixel,      // px (at document DPI)
-}
-
-impl Default for Unit {
-    fn default() -> Self {
-        Unit::Point
-    }
 }
 
 impl fmt::Display for Unit {

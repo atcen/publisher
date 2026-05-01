@@ -17,6 +17,12 @@ pub struct DocumentBuilder {
     color_profile: String,
 }
 
+impl Default for DocumentBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DocumentBuilder {
     pub fn new() -> Self {
         Self {
@@ -109,15 +115,16 @@ impl DocumentBuilder {
             }
         }
 
-        let mut swatches = Vec::new();
-        swatches.push(ColorSwatch {
-            name: "Black".to_string(),
-            color: Color::black(),
-        });
-        swatches.push(ColorSwatch {
-            name: "Paper".to_string(),
-            color: Color::white(),
-        });
+        let swatches = vec![
+            ColorSwatch {
+                name: "Black".to_string(),
+                color: Color::black(),
+            },
+            ColorSwatch {
+                name: "Paper".to_string(),
+                color: Color::white(),
+            },
+        ];
 
         Document {
             metadata: Metadata {
