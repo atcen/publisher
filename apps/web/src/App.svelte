@@ -3,63 +3,82 @@
 
   type Pt = number;
 
-  interface TextFrame {
-    x: Pt;
-    y: Pt;
-    width: Pt;
-    height: Pt;
-    content: string;
-  }
-
-  interface Frame {
-    id: string;
-    Text?: TextFrame;
-  }
-
-  interface Page {
-    width: Pt;
-    height: Pt;
-    frames: Frame[];
-  }
-
-  interface Spread {
-    pages: Page[];
-  }
-
-  interface Document {
-    metadata: { name: string };
-    spreads: Spread[];
-  }
-
   let activeTool = $state('select');
   let zoom = $state(1);
   let selectedFrameId = $state<string | null>(null);
-  let doc = $state<Document>({
-    metadata: { name: 'Untitled' },
+  let currentFilePath = $state<string | null>(null);
+  let hasUnsavedChanges = $state(false);
+  let doc = $state({
+    metadata: {
+      name: "Untitled Document",
+      author: "",
+      description: "",
+      created_at: Date.now(),
+      modified_at: Date.now(),
+      dpi: 72,
+      default_unit: "Points",
+      default_bleed: { top: 0, bottom: 0, inside: 0, outside: 0 },
+      color_profile: "sRGB"
+    },
+    swatches: [],
+    styles: { paragraph_styles: [], character_styles: [], object_styles: [] },
     spreads: []
   });
 
+  function handleKeyDown(event: KeyboardEvent) {
+    const isMac = navigator.platform.toUpperCase().indexOf("MAC") >= 0;
+    const isCtrlOrCmd = isMac ? event.metaKey : event.ctrlKey;
+    if (isCtrlOrCmd && event.key === 's') {
+      event.preventDefault();
+      if (event.shiftKey) handleSaveAs();
+      else handleSave();
+    }
+  }
+
   async function handleOpen() {
     try {
-      const path = await invoke("open_file");
-      console.log("Opened:", path);
-      // Here you would load the document from path
+      const path = await invoke<string>("open_file");
+      const content = await invoke<string>("read_document", { filePath: path });
+      doc = JSON.parse(content);
+      currentFilePath = path;
+      hasUnsavedChanges = false;
     } catch (e) {
-      console.error(e);
+      alert("Failed to open file: " + (e as Error).message);
     }
   }
 
   async function handleSave() {
     try {
-      const path = await invoke("save_file");
-      console.log("Saved to:", path);
-      // Here you would save the document to path
+      if (!currentFilePath) {
+        await handleSaveAs();
+        return;
+      }
+      doc.metadata.modified_at = Date.now();
+      const documentJson = JSON.stringify(doc, null, 2);
+      await invoke<string>("save_document", { filePath: currentFilePath, documentJson });
+      hasUnsavedChanges = false;
     } catch (e) {
-      console.error(e);
+      alert("Failed to save file: " + (e as Error).message);
     }
   }
 
-  let selectedFrame = $derived.by((): Frame | null => {
+  async function handleSaveAs() {
+    try {
+      doc.metadata.modified_at = Date.now();
+      const documentJson = JSON.stringify(doc, null, 2);
+      const path = await invoke<string>("save_as_file", { documentJson });
+      currentFilePath = path;
+      hasUnsavedChanges = false;
+    } catch (e) {
+      alert("Failed to save file: " + (e as Error).message);
+    }
+  }
+
+  function markDocumentAsChanged() {
+    hasUnsavedChanges = true;
+  }
+
+  let selectedFrame = $derived.by(() => {
     for (const spread of doc.spreads) {
       for (const page of spread.pages) {
         for (const frame of page.frames) {
@@ -69,7 +88,11 @@
     }
     return null;
   });
+
+  let titleText = $derived(`${doc.metadata.name}${hasUnsavedChanges ? " •" : ""}`);
 </script>
+
+<svelte:window on:keydown={handleKeyDown} />
 
 <main>
   <nav class="menu-bar">
@@ -80,6 +103,7 @@
         <div class="dropdown-content">
           <button onclick={handleOpen}>Öffnen...</button>
           <button onclick={handleSave}>Speichern</button>
+          <button onclick={handleSaveAs}>Speichern unter...</button>
         </div>
       </div>
       <span>Bearbeiten</span>
@@ -87,7 +111,7 @@
       <span>Objekt</span>
       <span>Ansicht</span>
     </div>
-    <div class="doc-title">{doc.metadata.name}</div>
+    <div class="doc-title">{titleText}</div>
   </nav>
 
   <aside class="toolbar">
@@ -112,9 +136,7 @@
       </div>
     </aside>
 
-    <!-- Klick auf Workspace hebt Auswahl auf -->
     <div class="workspace-container" onclick={() => selectedFrameId = null} role="presentation">
-      <canvas id="renderer-canvas"></canvas>
       <div class="workspace" style="--zoom: {zoom}">
         {#each doc.spreads as spread}
           <div class="spread">
@@ -122,18 +144,12 @@
               <div class="page" style="width: {page.width}px; height: {page.height}px;">
                 {#each page.frames as frame}
                   {#if frame.Text}
-                    <!-- svelte-ignore a11y-click-events-have-key-events -->
-                    <!-- svelte-ignore a11y-no-static-element-interactions -->
-                    <div 
+                    <div
                       class="frame text-frame"
                       class:selected={selectedFrameId === frame.id}
-                      onclick={(e) => { e.stopPropagation(); selectedFrameId = frame.id; }}
-                      style="
-                        left: {frame.Text.x}px; 
-                        top: {frame.Text.y}px; 
-                        width: {frame.Text.width}px; 
-                        height: {frame.Text.height}px;
-                      "
+                      onclick={(e) => { e.stopPropagation(); selectedFrameId = frame.id; markDocumentAsChanged(); }}
+                      style="left: {frame.Text.x}px; top: {frame.Text.y}px; width: {frame.Text.width}px; height: {frame.Text.height}px;"
+                      on:input={markDocumentAsChanged}
                     >
                       {frame.Text.content}
                     </div>
@@ -152,15 +168,15 @@
         <div class="properties">
           <label>
             Inhalt
-            <textarea bind:value={selectedFrame.Text.content}></textarea>
+            <textarea bind:value={selectedFrame.Text.content} on:input={markDocumentAsChanged}></textarea>
           </label>
           <div class="prop-group">
-            <label>X <input type="number" bind:value={selectedFrame.Text.x} /></label>
-            <label>Y <input type="number" bind:value={selectedFrame.Text.y} /></label>
+            <label>X <input type="number" bind:value={selectedFrame.Text.x} on:input={markDocumentAsChanged} /></label>
+            <label>Y <input type="number" bind:value={selectedFrame.Text.y} on:input={markDocumentAsChanged} /></label>
           </div>
           <div class="prop-group">
-            <label>W <input type="number" bind:value={selectedFrame.Text.width} /></label>
-            <label>H <input type="number" bind:value={selectedFrame.Text.height} /></label>
+            <label>W <input type="number" bind:value={selectedFrame.Text.width} on:input={markDocumentAsChanged} /></label>
+            <label>H <input type="number" bind:value={selectedFrame.Text.height} on:input={markDocumentAsChanged} /></label>
           </div>
         </div>
       {:else}
@@ -199,7 +215,7 @@
   .logo { font-weight: bold; color: #fff; letter-spacing: 1px; }
   .menu-items { display: flex; gap: 15px; }
   .menu-dropdown { position: relative; cursor: pointer; }
-  .dropdown-content { display: none; position: absolute; top: 100%; left: 0; background: #2d2d2d; border: 1px solid #111; min-width: 120px; z-index: 100; }
+  .dropdown-content { display: none; position: absolute; top: 100%; left: 0; background: #2d2d2d; border: 1px solid #111; min-width: 200px; z-index: 100; }
   .menu-dropdown:hover .dropdown-content { display: block; }
   .dropdown-content button { width: 100%; background: transparent; border: none; color: #ccc; padding: 8px 12px; text-align: left; cursor: pointer; font-size: 13px; }
   .dropdown-content button:hover { background: #007acc; color: white; }
@@ -212,6 +228,7 @@
   .sidebar-right { border-left: 1px solid #111; border-right: none; }
   .panel-header { background: #333; padding: 6px 12px; font-size: 11px; text-transform: uppercase; font-weight: bold; color: #aaa; }
   .workspace-container { flex: 1; overflow: auto; background: #181818; position: relative; padding: 100px; }
+  #renderer-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: none; }
   .workspace { display: flex; flex-direction: column; align-items: center; gap: 50px; }
   .spread { display: flex; gap: 2px; background: #000; padding: 2px; box-shadow: 0 20px 50px rgba(0,0,0,0.6); transform: scale(var(--zoom)); transform-origin: top center; transition: transform 0.1s ease-out; }
   .page { background: white; position: relative; color: black; }
