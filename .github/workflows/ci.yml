@@ -38,6 +38,8 @@ jobs:
           targets: wasm32-unknown-unknown
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
+        with:
+          key: wasm32-unknown-unknown
       - name: Build publisher-core for WASM
         run: cargo build --target wasm32-unknown-unknown -p publisher-core --lib
       - name: Build publisher-wasm for WASM
