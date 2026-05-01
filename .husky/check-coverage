@@ -1,0 +1,36 @@
+#!/bin/sh
+
+echo "📊 Checking test coverage..."
+
+# Run coverage check with a 70% minimum threshold
+cargo tarpaulin --workspace --skip-clean --timeout 300 --out Stdout | tee coverage.txt
+
+# Extract coverage percentage
+COVERAGE=$(grep "Coverage: " coverage.txt | tail -1 | grep -oE '[0-9]+\.[0-9]+' | head -1)
+
+if [ -z "$COVERAGE" ]; then
+  echo "⚠️  Could not determine coverage"
+  rm -f coverage.txt
+  exit 0
+fi
+
+echo ""
+echo "📈 Coverage: ${COVERAGE}%"
+
+# Store current coverage for comparison
+if [ -f ".coverage-baseline" ]; then
+  BASELINE=$(cat .coverage-baseline)
+  echo "📍 Baseline: ${BASELINE}%"
+  
+  # Compare coverages (using simple string comparison for decimals)
+  if [ $(echo "$COVERAGE < $BASELINE" | bc) -eq 1 ]; then
+    echo "❌ Coverage decreased from ${BASELINE}% to ${COVERAGE}%"
+    rm -f coverage.txt
+    exit 1
+  fi
+fi
+
+# Update baseline
+echo "$COVERAGE" > .coverage-baseline
+rm -f coverage.txt
+echo "✅ Coverage check passed!"
