@@ -296,7 +296,6 @@ impl Default for Styles {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json;
 
     // ===== Document Creation Tests =====
     #[test]

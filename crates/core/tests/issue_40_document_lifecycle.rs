@@ -298,7 +298,7 @@ fn test_issue_40_multiple_saves() {
     // Save multiple times
     let bytes = serialize_document(&doc).unwrap();
     for i in 0..3 {
-        fs::write(&file_path, &bytes).expect(&format!("Save {} failed", i + 1));
+        fs::write(&file_path, &bytes).unwrap_or_else(|_| panic!("Save {} failed", i + 1));
         assert!(file_path.exists());
     }
 
