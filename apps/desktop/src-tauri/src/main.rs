@@ -1,11 +1,12 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-mod document_service;
 mod commands;
+mod document_service;
 
+use commands::{get_history_state, get_redo_history, get_undo_history, redo, undo};
 use document_service::{DocumentService, DocumentServiceError};
-use commands::{undo, redo, get_undo_history, get_redo_history, get_history_state};
+use publisher_core::DocumentState;
 use serde_json::json;
 use std::fs;
 use std::io::Write;
@@ -13,7 +14,6 @@ use std::path::Path;
 use std::sync::Mutex;
 use tauri::Runtime;
 use tauri_plugin_dialog::DialogExt;
-use publisher_core::DocumentState;
 
 /// Application state containing both document service and history/undo-redo state
 pub struct AppState {
@@ -102,8 +102,7 @@ async fn read_document<R: Runtime>(
     _app: tauri::AppHandle<R>,
     file_path: String,
 ) -> Result<String, String> {
-    fs::read_to_string(&file_path)
-        .map_err(|e| format!("Failed to read file: {}", e))
+    fs::read_to_string(&file_path).map_err(|e| format!("Failed to read file: {}", e))
 }
 
 /// Save the active document
@@ -145,8 +144,7 @@ async fn save_document_file<R: Runtime>(
             .map_err(|e| format!("Failed to remove existing file: {}", e))?;
     }
 
-    fs::rename(&temp_path, &file_path)
-        .map_err(|e| format!("Failed to replace file: {}", e))?;
+    fs::rename(&temp_path, &file_path).map_err(|e| format!("Failed to replace file: {}", e))?;
 
     Ok(file_path)
 }
@@ -225,8 +223,7 @@ async fn save_as_file<R: Runtime>(
             let path_obj = Path::new(&final_path);
             let parent = path_obj.parent().ok_or("Invalid file path")?;
 
-            fs::create_dir_all(parent)
-                .map_err(|e| format!("Failed to create directory: {}", e))?;
+            fs::create_dir_all(parent).map_err(|e| format!("Failed to create directory: {}", e))?;
 
             let temp_path = parent.join(format!(
                 ".{}.tmp",

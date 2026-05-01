@@ -289,8 +289,7 @@ mod tests {
         history.push(create_test_action("Test action"));
 
         let json = serde_json::to_string(&history).expect("Serialization failed");
-        let deserialized: History =
-            serde_json::from_str(&json).expect("Deserialization failed");
+        let deserialized: History = serde_json::from_str(&json).expect("Deserialization failed");
 
         assert_eq!(deserialized.undo_count(), 1);
         assert_eq!(deserialized.max_undo_steps, Some(10));

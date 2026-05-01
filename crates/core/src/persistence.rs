@@ -56,18 +56,14 @@ pub fn serialize_document(doc: &Document) -> Result<Vec<u8>, PersistenceError> {
     };
 
     // Use compact JSON format to minimize file size and serialization overhead
-    serde_json::to_vec(&file)
-        .map_err(|e| PersistenceError::SerializationError(e.to_string()))
+    serde_json::to_vec(&file).map_err(|e| PersistenceError::SerializationError(e.to_string()))
 }
 
 /// Deserialize a document from JSON bytes
 pub fn deserialize_document(data: &[u8]) -> Result<Document, PersistenceError> {
     // Try to parse the JSON
     let file: DocumentFile = serde_json::from_slice(data)
-        .map_err(|e| PersistenceError::ParseError(format!(
-            "Invalid JSON structure: {}",
-            e
-        )))?;
+        .map_err(|e| PersistenceError::ParseError(format!("Invalid JSON structure: {}", e)))?;
 
     // Check version compatibility
     if file.version > DOCUMENT_FORMAT_VERSION {

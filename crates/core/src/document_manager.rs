@@ -209,7 +209,10 @@ mod tests {
 
         assert_eq!(manager.count(), 1);
         let loaded = manager.get(id).unwrap();
-        assert_eq!(loaded.file_path, Some("/path/to/file.publisher".to_string()));
+        assert_eq!(
+            loaded.file_path,
+            Some("/path/to/file.publisher".to_string())
+        );
         assert_eq!(loaded.state, DocumentState::Clean);
     }
 

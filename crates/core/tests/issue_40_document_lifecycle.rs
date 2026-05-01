@@ -118,10 +118,16 @@ fn test_issue_40_unsupported_file_version() {
     // Verify we get the FormatError for unsupported version, not a ParseError
     match result {
         Err(PersistenceError::FormatError(msg)) => {
-            assert!(msg.contains("999"), "Error message should mention version 999");
+            assert!(
+                msg.contains("999"),
+                "Error message should mention version 999"
+            );
             println!("Got expected FormatError: {}", msg);
         }
-        other => panic!("Expected FormatError for unsupported version, got: {:?}", other),
+        other => panic!(
+            "Expected FormatError for unsupported version, got: {:?}",
+            other
+        ),
     }
 }
 
@@ -173,9 +179,7 @@ fn test_issue_40_close_with_unsaved_changes() {
     // Acceptance: "Close" asks to save on unsaved changes
     let mut manager = DocumentManager::new();
 
-    let doc = DocumentBuilder::new()
-        .with_name("Test Doc")
-        .build();
+    let doc = DocumentBuilder::new().with_name("Test Doc").build();
 
     let id = manager.create_document(doc);
 
@@ -200,9 +204,7 @@ fn test_issue_40_document_state_initialization() {
     // Acceptance: Document state initialized from CRDT layer on first mutation
     let mut manager = DocumentManager::new();
 
-    let doc = DocumentBuilder::new()
-        .with_name("CRDT Test")
-        .build();
+    let doc = DocumentBuilder::new().with_name("CRDT Test").build();
 
     let id = manager.create_document(doc);
     let loaded = manager.get(id).unwrap();
@@ -324,7 +326,10 @@ fn test_issue_40_file_extension_validation() {
     // Correct extension should work for loading
     let correct_path = temp_dir.path().join("test.publisher");
     fs::write(&correct_path, &bytes).unwrap();
-    assert_eq!(correct_path.extension().and_then(|s| s.to_str()), Some("publisher"));
+    assert_eq!(
+        correct_path.extension().and_then(|s| s.to_str()),
+        Some("publisher")
+    );
 
     // DocumentService would reject the .txt file based on extension validation
     // (Extension check happens in document_service.rs:open_document)

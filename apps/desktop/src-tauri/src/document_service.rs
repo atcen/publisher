@@ -1,6 +1,5 @@
 use publisher_core::{
-    builder::DocumentBuilder, document_manager::*, paper::PaperFormat, persistence::*,
-    Document,
+    builder::DocumentBuilder, document_manager::*, paper::PaperFormat, persistence::*, Document,
 };
 use std::fs;
 use std::path::PathBuf;
@@ -62,10 +61,7 @@ impl DocumentService {
     }
 
     /// Open a document from disk
-    pub fn open_document(
-        &mut self,
-        file_path: &str,
-    ) -> Result<DocumentId, DocumentServiceError> {
+    pub fn open_document(&mut self, file_path: &str) -> Result<DocumentId, DocumentServiceError> {
         let path = PathBuf::from(file_path);
 
         // Validate path exists
@@ -84,17 +80,13 @@ impl DocumentService {
         }
 
         // Read file
-        let file_contents =
-            fs::read(&path).map_err(|e| DocumentServiceError::IO(e.to_string()))?;
+        let file_contents = fs::read(&path).map_err(|e| DocumentServiceError::IO(e.to_string()))?;
 
         // Deserialize document
         let document = deserialize_document(&file_contents)?;
 
         // Load into manager
-        Ok(self.manager.load_document(
-            document,
-            file_path.to_string(),
-        ))
+        Ok(self.manager.load_document(document, file_path.to_string()))
     }
 
     /// Save a document to disk
@@ -107,12 +99,13 @@ impl DocumentService {
         let file_path = doc
             .file_path
             .as_ref()
-            .ok_or_else(|| DocumentServiceError::InvalidPath("Document has no file path".to_string()))?
+            .ok_or_else(|| {
+                DocumentServiceError::InvalidPath("Document has no file path".to_string())
+            })?
             .clone();
 
         let bytes = serialize_document(&doc.document)?;
-        fs::write(&file_path, bytes)
-            .map_err(|e| DocumentServiceError::IO(e.to_string()))?;
+        fs::write(&file_path, bytes).map_err(|e| DocumentServiceError::IO(e.to_string()))?;
 
         // Mark document as clean after successful save
         self.manager.get_mut(id).unwrap().mark_clean();
@@ -129,11 +122,7 @@ impl DocumentService {
         let new_path_buf = PathBuf::from(new_path);
 
         // Validate extension
-        if new_path_buf
-            .extension()
-            .and_then(|s| s.to_str())
-            != Some("publisher")
-        {
+        if new_path_buf.extension().and_then(|s| s.to_str()) != Some("publisher") {
             return Err(DocumentServiceError::InvalidPath(
                 "File must have .publisher extension".to_string(),
             ));

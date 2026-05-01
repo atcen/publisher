@@ -170,7 +170,9 @@ pub fn get_redo_history(state: State<'_, crate::AppState>) -> Result<Vec<History
 
 /// Command: Check undo/redo availability and counts
 #[tauri::command]
-pub fn get_history_state(state: State<'_, crate::AppState>) -> Result<HistoryStateResponse, String> {
+pub fn get_history_state(
+    state: State<'_, crate::AppState>,
+) -> Result<HistoryStateResponse, String> {
     let doc_state = state
         .document_state
         .lock()
@@ -213,8 +215,7 @@ mod tests {
             description: "Test action".to_string(),
         };
         let json = serde_json::to_string(&item).expect("Failed to serialize");
-        let deserialized: HistoryItem =
-            serde_json::from_str(&json).expect("Failed to deserialize");
+        let deserialized: HistoryItem = serde_json::from_str(&json).expect("Failed to deserialize");
         assert_eq!(deserialized.id, "test-id");
         assert_eq!(deserialized.description, "Test action");
     }

@@ -1,4 +1,4 @@
-use crate::{Document, History, Action};
+use crate::{Action, Document, History};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -55,7 +55,7 @@ impl DocumentState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Metadata, Bleed, Unit, Styles};
+    use crate::{Bleed, Metadata, Styles, Unit};
 
     fn create_test_document() -> Document {
         Document {

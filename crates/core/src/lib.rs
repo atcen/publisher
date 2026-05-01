@@ -1,14 +1,14 @@
 pub mod builder;
 pub mod document_manager;
+pub mod document_state;
+pub mod history;
 pub mod paper;
 pub mod persistence;
 pub mod units;
-pub mod history;
-pub mod document_state;
 
 pub use crate::units::{Pt, Unit};
-pub use history::{History, Action};
 pub use document_state::DocumentState;
+pub use history::{Action, History};
 use serde::{Deserialize, Serialize};
 
 pub fn init() {
