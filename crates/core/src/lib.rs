@@ -1,9 +1,9 @@
-pub mod units;
-pub mod paper;
 pub mod builder;
+pub mod paper;
+pub mod units;
 
+pub use crate::units::{Pt, Unit};
 use serde::{Deserialize, Serialize};
-pub use crate::units::{Unit, Pt};
 
 pub fn init() {
     // Placeholder for core initialization
@@ -190,13 +190,23 @@ impl Default for ParagraphStyle {
 
 impl Color {
     pub fn black() -> Self {
-        Color::Cmyk { c: 0.0, m: 0.0, y: 0.0, k: 1.0 }
+        Color::Cmyk {
+            c: 0.0,
+            m: 0.0,
+            y: 0.0,
+            k: 1.0,
+        }
     }
-    
+
     pub fn white() -> Self {
-        Color::Cmyk { c: 0.0, m: 0.0, y: 0.0, k: 0.0 }
+        Color::Cmyk {
+            c: 0.0,
+            m: 0.0,
+            y: 0.0,
+            k: 0.0,
+        }
     }
-    
+
     pub fn rgb(r: f64, g: f64, b: f64) -> Self {
         Color::Rgb { r, g, b }
     }
@@ -223,7 +233,7 @@ pub struct ParagraphStyle {
     pub name: String,
     pub based_on: Option<String>,
     pub next_style: Option<String>,
-    
+
     // Typographic properties
     pub font_family: String,
     pub font_style: String,
@@ -389,7 +399,13 @@ mod tests {
             frames: vec![],
         };
 
-        let frame = Frame::Text(TextFrame::new(Pt(50.0), Pt(50.0), Pt(200.0), Pt(100.0), "Test content"));
+        let frame = Frame::Text(TextFrame::new(
+            Pt(50.0),
+            Pt(50.0),
+            Pt(200.0),
+            Pt(100.0),
+            "Test content",
+        ));
         page.frames.push(frame);
 
         assert_eq!(page.frames.len(), 1);
@@ -441,7 +457,13 @@ mod tests {
 
     #[test]
     fn test_image_frame_creation() {
-        let frame = ImageFrame::new(Pt(10.0), Pt(10.0), Pt(200.0), Pt(150.0), "/path/to/image.jpg");
+        let frame = ImageFrame::new(
+            Pt(10.0),
+            Pt(10.0),
+            Pt(200.0),
+            Pt(150.0),
+            "/path/to/image.jpg",
+        );
         assert_eq!(frame.x, Pt(10.0));
         assert_eq!(frame.width, Pt(200.0));
         assert_eq!(frame.height, Pt(150.0));
@@ -450,7 +472,13 @@ mod tests {
 
     #[test]
     fn test_image_frame_mutation() {
-        let mut frame = ImageFrame::new(Pt(10.0), Pt(10.0), Pt(200.0), Pt(150.0), "/path/to/image.jpg");
+        let mut frame = ImageFrame::new(
+            Pt(10.0),
+            Pt(10.0),
+            Pt(200.0),
+            Pt(150.0),
+            "/path/to/image.jpg",
+        );
         frame.asset_path = "/new/path/image.png".to_string();
         frame.width = Pt(300.0);
 
@@ -460,7 +488,13 @@ mod tests {
 
     #[test]
     fn test_shape_frame_creation() {
-        let frame = ShapeFrame::new(Pt(50.0), Pt(50.0), Pt(100.0), Pt(100.0), ShapeType::Rectangle);
+        let frame = ShapeFrame::new(
+            Pt(50.0),
+            Pt(50.0),
+            Pt(100.0),
+            Pt(100.0),
+            ShapeType::Rectangle,
+        );
         assert_eq!(frame.x, Pt(50.0));
         assert_eq!(frame.shape_type, ShapeType::Rectangle);
     }
@@ -475,7 +509,13 @@ mod tests {
     #[test]
     fn test_shape_frame_path() {
         let path_data = "M10 10 L90 90".to_string();
-        let frame = ShapeFrame::new(Pt(0.0), Pt(0.0), Pt(100.0), Pt(100.0), ShapeType::Path(path_data.clone()));
+        let frame = ShapeFrame::new(
+            Pt(0.0),
+            Pt(0.0),
+            Pt(100.0),
+            Pt(100.0),
+            ShapeType::Path(path_data.clone()),
+        );
         if let ShapeType::Path(p) = frame.shape_type {
             assert_eq!(p, path_data);
         } else {
@@ -626,12 +666,10 @@ mod tests {
                 },
                 color_profile: "sRGB".to_string(),
             },
-            swatches: vec![
-                ColorSwatch {
-                    name: "Black".to_string(),
-                    color: Color::black(),
-                }
-            ],
+            swatches: vec![ColorSwatch {
+                name: "Black".to_string(),
+                color: Color::black(),
+            }],
             styles: Styles::default(),
             spreads: vec![],
         };
@@ -646,7 +684,13 @@ mod tests {
 
     #[test]
     fn test_frame_serialize_deserialize() {
-        let frame = Frame::Text(TextFrame::new(Pt(10.0), Pt(20.0), Pt(100.0), Pt(50.0), "Test content"));
+        let frame = Frame::Text(TextFrame::new(
+            Pt(10.0),
+            Pt(20.0),
+            Pt(100.0),
+            Pt(50.0),
+            "Test content",
+        ));
         let json = serde_json::to_string(&frame).expect("Serialization failed");
         let deserialized: Frame = serde_json::from_str(&json).expect("Deserialization failed");
 
@@ -682,7 +726,8 @@ mod tests {
         };
 
         let json = serde_json::to_string(&style).expect("Serialization failed");
-        let deserialized: ParagraphStyle = serde_json::from_str(&json).expect("Deserialization failed");
+        let deserialized: ParagraphStyle =
+            serde_json::from_str(&json).expect("Deserialization failed");
 
         assert_eq!(style.name, deserialized.name);
         assert_eq!(style.font_size, deserialized.font_size);
@@ -692,7 +737,12 @@ mod tests {
 
     #[test]
     fn test_color_serialize_deserialize() {
-        let cmyk = Color::Cmyk { c: 0.5, m: 0.3, y: 0.1, k: 0.0 };
+        let cmyk = Color::Cmyk {
+            c: 0.5,
+            m: 0.3,
+            y: 0.1,
+            k: 0.0,
+        };
         let json = serde_json::to_string(&cmyk).expect("Serialization failed");
         let deserialized: Color = serde_json::from_str(&json).expect("Deserialization failed");
 
@@ -711,26 +761,30 @@ mod tests {
     fn test_styles_serialize_deserialize() {
         let styles = Styles {
             paragraph_styles: vec![ParagraphStyle::default()],
-            character_styles: vec![
-                CharacterStyle {
-                    name: "Emphasis".to_string(),
-                    based_on: None,
-                    font_family: Some("Georgia".to_string()),
-                    font_style: Some("Italic".to_string()),
-                    font_size: Some(Pt(14.0)),
-                    leading: None,
-                    tracking: None,
-                    color_swatch: None,
-                }
-            ],
+            character_styles: vec![CharacterStyle {
+                name: "Emphasis".to_string(),
+                based_on: None,
+                font_family: Some("Georgia".to_string()),
+                font_style: Some("Italic".to_string()),
+                font_size: Some(Pt(14.0)),
+                leading: None,
+                tracking: None,
+                color_swatch: None,
+            }],
             object_styles: vec![],
         };
 
         let json = serde_json::to_string(&styles).expect("Serialization failed");
         let deserialized: Styles = serde_json::from_str(&json).expect("Deserialization failed");
 
-        assert_eq!(styles.paragraph_styles.len(), deserialized.paragraph_styles.len());
-        assert_eq!(styles.character_styles.len(), deserialized.character_styles.len());
+        assert_eq!(
+            styles.paragraph_styles.len(),
+            deserialized.paragraph_styles.len()
+        );
+        assert_eq!(
+            styles.character_styles.len(),
+            deserialized.character_styles.len()
+        );
     }
 
     #[test]
@@ -745,8 +799,20 @@ mod tests {
                 outside: Pt(36.0),
             },
             frames: vec![
-                Frame::Text(TextFrame::new(Pt(50.0), Pt(50.0), Pt(200.0), Pt(100.0), "Hello")),
-                Frame::Shape(ShapeFrame::new(Pt(300.0), Pt(300.0), Pt(50.0), Pt(50.0), ShapeType::Rectangle)),
+                Frame::Text(TextFrame::new(
+                    Pt(50.0),
+                    Pt(50.0),
+                    Pt(200.0),
+                    Pt(100.0),
+                    "Hello",
+                )),
+                Frame::Shape(ShapeFrame::new(
+                    Pt(300.0),
+                    Pt(300.0),
+                    Pt(50.0),
+                    Pt(50.0),
+                    ShapeType::Rectangle,
+                )),
             ],
         };
 

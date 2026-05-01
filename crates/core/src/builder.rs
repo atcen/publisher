@@ -1,6 +1,6 @@
-use crate::{Document, Metadata, Bleed, Styles, Spread, Page, Margins, ColorSwatch, Color};
-use crate::units::Unit;
 use crate::paper::PaperFormat;
+use crate::units::Unit;
+use crate::{Bleed, Color, ColorSwatch, Document, Margins, Metadata, Page, Spread, Styles};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 pub struct DocumentBuilder {
@@ -70,7 +70,7 @@ impl DocumentBuilder {
             return self.with_pages(1).build();
         }
         let (width, height) = self.format.dimensions_pt();
-        
+
         let now = match SystemTime::now().duration_since(UNIX_EPOCH) {
             Ok(duration) => duration.as_secs(),
             Err(_) => {
@@ -98,7 +98,9 @@ impl DocumentBuilder {
                 } else {
                     current_pages.push(page);
                     if current_pages.len() == 2 || i == self.pages_count - 1 {
-                        spreads.push(Spread { pages: current_pages });
+                        spreads.push(Spread {
+                            pages: current_pages,
+                        });
                         current_pages = Vec::new();
                     }
                 }
@@ -148,7 +150,7 @@ mod tests {
             .with_pages(3)
             .with_facing_pages(true)
             .build();
-            
+
         assert_eq!(doc.metadata.name, "My Magazine");
         assert_eq!(doc.spreads.len(), 2);
         assert_eq!(doc.spreads[0].pages.len(), 1);
@@ -158,9 +160,7 @@ mod tests {
 
     #[test]
     fn test_builder_zero_pages() {
-        let doc = DocumentBuilder::new()
-            .with_pages(0)
-            .build();
+        let doc = DocumentBuilder::new().with_pages(0).build();
         assert_eq!(doc.spreads.len(), 1);
         assert_eq!(doc.spreads[0].pages.len(), 1);
     }
