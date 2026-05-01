@@ -7,6 +7,7 @@
   let zoom = $state(1);
   let selectedFrameId = $state<string | null>(null);
   let doc = $state({
+    metadata: { name: 'Untitled' },
     spreads: []
   });
 
