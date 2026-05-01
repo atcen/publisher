@@ -2,8 +2,42 @@
   import { invoke } from "@tauri-apps/api/core";
 
   type Pt = number;
-...
+
+  interface TextFrame {
+    x: Pt;
+    y: Pt;
+    width: Pt;
+    height: Pt;
+    content: string;
+  }
+
+  interface Frame {
+    id: string;
+    Text?: TextFrame;
+  }
+
+  interface Page {
+    width: Pt;
+    height: Pt;
+    frames: Frame[];
+  }
+
+  interface Spread {
+    pages: Page[];
+  }
+
+  interface Document {
+    metadata: { name: string };
+    spreads: Spread[];
+  }
+
   let activeTool = $state('select');
+  let zoom = $state(1);
+  let selectedFrameId = $state<string | null>(null);
+  let doc = $state<Document>({
+    metadata: { name: 'Untitled' },
+    spreads: []
+  });
 
   async function handleOpen() {
     try {
@@ -25,7 +59,7 @@
     }
   }
 
-  let selectedFrame = $derived.by(() => {
+  let selectedFrame = $derived.by((): Frame | null => {
     for (const spread of doc.spreads) {
       for (const page of spread.pages) {
         for (const frame of page.frames) {
@@ -80,6 +114,7 @@
 
     <!-- Klick auf Workspace hebt Auswahl auf -->
     <div class="workspace-container" onclick={() => selectedFrameId = null} role="presentation">
+      <canvas id="renderer-canvas"></canvas>
       <div class="workspace" style="--zoom: {zoom}">
         {#each doc.spreads as spread}
           <div class="spread">

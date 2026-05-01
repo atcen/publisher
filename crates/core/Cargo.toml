@@ -7,3 +7,19 @@ license.workspace = true
 [dependencies]
 serde.workspace = true
 automerge.workspace = true
+
+# For WASM builds: add js feature to UUID for JavaScript-based RNG
+# UUID is a transitive dependency of automerge; this configuration ensures
+# the js feature is enabled when compiling for WASM targets, while native
+# targets use getrandom for randomness. Dependencies are still resolved at
+# workspace level but only compiled when needed for the target.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+uuid = { workspace = true, features = ["js"] }
+
+[dev-dependencies]
+serde_json = "1.0"
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "frame_allocation"
+harness = false

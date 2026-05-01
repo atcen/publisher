@@ -2,7 +2,7 @@ name: Issue Prioritizer
 
 on:
   issues:
-    types: [opened, edited, reopened]
+    types: [opened, edited]
 
 jobs:
   prioritize:
