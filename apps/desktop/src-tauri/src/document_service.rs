@@ -144,12 +144,13 @@ impl DocumentService {
             .get_mut(id)
             .ok_or_else(|| DocumentServiceError::NotFound("Document not found".to_string()))?;
 
-        // Update file path
-        doc.file_path = Some(new_path.to_string());
-
-        // Write to new path
+        // Serialize and write to new path BEFORE updating the file_path reference
+        // This ensures in-memory state is only updated if the write succeeds
         let bytes = serialize_document(&doc.document)?;
         fs::write(new_path, bytes).map_err(|e| DocumentServiceError::IO(e.to_string()))?;
+
+        // Only update file path AFTER successful write
+        doc.file_path = Some(new_path.to_string());
 
         // Mark as clean
         doc.mark_clean();

@@ -8,6 +8,8 @@ pub enum PersistenceError {
     ReadError(String),
     /// Failed to write file
     WriteError(String),
+    /// Failed to serialize document to JSON
+    SerializationError(String),
     /// Invalid JSON structure
     ParseError(String),
     /// Unsupported file version or format
@@ -21,6 +23,7 @@ impl std::fmt::Display for PersistenceError {
         match self {
             PersistenceError::ReadError(msg) => write!(f, "Read error: {}", msg),
             PersistenceError::WriteError(msg) => write!(f, "Write error: {}", msg),
+            PersistenceError::SerializationError(msg) => write!(f, "Serialization error: {}", msg),
             PersistenceError::ParseError(msg) => write!(f, "Parse error: {}", msg),
             PersistenceError::FormatError(msg) => write!(f, "Format error: {}", msg),
             PersistenceError::FileNotFound(msg) => write!(f, "File not found: {}", msg),
@@ -52,8 +55,9 @@ pub fn serialize_document(doc: &Document) -> Result<Vec<u8>, PersistenceError> {
         document: doc.clone(),
     };
 
-    serde_json::to_vec_pretty(&file)
-        .map_err(|e| PersistenceError::WriteError(e.to_string()))
+    // Use compact JSON format to minimize file size and serialization overhead
+    serde_json::to_vec(&file)
+        .map_err(|e| PersistenceError::SerializationError(e.to_string()))
 }
 
 /// Deserialize a document from JSON bytes
@@ -174,10 +178,35 @@ mod tests {
 
     #[test]
     fn test_unsupported_future_version() {
-        let future_version = r#"{"version": 99, "document": null}"#;
+        // Use a minimally valid document so we test version compatibility, not parse errors
+        let future_version = r#"{
+            "version": 99,
+            "document": {
+                "metadata": {
+                    "name": "Test",
+                    "author": "",
+                    "description": "",
+                    "created_at": 0,
+                    "modified_at": 0,
+                    "dpi": 300,
+                    "default_unit": "Millimeter",
+                    "default_bleed": {"top": {"Pt": 0}, "bottom": {"Pt": 0}, "inside": {"Pt": 0}, "outside": {"Pt": 0}},
+                    "color_profile": "sRGB"
+                },
+                "swatches": [],
+                "styles": {},
+                "spreads": []
+            }
+        }"#;
         let result = deserialize_document(future_version.as_bytes());
         assert!(result.is_err());
-        // Could be either ParseError (due to null document) or FormatError (if version check happens first)
-        // The important part is that we handle invalid data gracefully
+
+        // Verify it's a FormatError (version check), not ParseError
+        match result {
+            Err(PersistenceError::FormatError(msg)) => {
+                assert!(msg.contains("99"), "Should mention version 99 in error");
+            }
+            other => panic!("Expected FormatError, got: {:?}", other),
+        }
     }
 }
