@@ -116,7 +116,7 @@ impl History {
         while !self.undo_stack.is_empty() {
             let action = self.undo_stack.back().cloned()?;
             if action.id == target_id {
-                // Rückgängig gemachte Aktionen zum Redo-Stack hinzufügen
+                // Add undone actions to the redo stack
                 for action in jumped_actions.iter() {
                     self.redo_stack.push_back(action.clone());
                 }

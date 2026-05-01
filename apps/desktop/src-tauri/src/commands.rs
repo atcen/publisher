@@ -1,15 +1,19 @@
-use publisher_core::DocumentState;
 use serde::{Deserialize, Serialize};
-use std::sync::Mutex;
 use tauri::State;
 
-/// Shared mutable state for the document with history
-pub struct AppState {
-    pub document_state: Mutex<Option<DocumentState>>,
+/// Check undo/redo availability and counts
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HistoryStateResponse {
+    pub can_undo: bool,
+    pub can_redo: bool,
+    pub undo_count: usize,
+    pub redo_count: usize,
 }
 
 /// Response for undo/redo operations with Action details
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct HistoryResponse {
     pub success: bool,
     pub message: String,
@@ -22,6 +26,7 @@ pub struct HistoryResponse {
 
 /// Serializable action data returned to frontend
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct ActionData {
     pub id: String,
     pub description: String,
@@ -32,7 +37,7 @@ pub struct ActionData {
 
 /// Command: Undo the last action
 #[tauri::command]
-pub fn undo(state: State<'_, AppState>) -> Result<HistoryResponse, String> {
+pub fn undo(state: State<'_, crate::AppState>) -> Result<HistoryResponse, String> {
     let mut doc_state = state
         .document_state
         .lock()
@@ -74,7 +79,7 @@ pub fn undo(state: State<'_, AppState>) -> Result<HistoryResponse, String> {
 
 /// Command: Redo the last undone action
 #[tauri::command]
-pub fn redo(state: State<'_, AppState>) -> Result<HistoryResponse, String> {
+pub fn redo(state: State<'_, crate::AppState>) -> Result<HistoryResponse, String> {
     let mut doc_state = state
         .document_state
         .lock()
@@ -116,13 +121,14 @@ pub fn redo(state: State<'_, AppState>) -> Result<HistoryResponse, String> {
 
 /// Command: Get the undo history for display in UI
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct HistoryItem {
     pub id: String,
     pub description: String,
 }
 
 #[tauri::command]
-pub fn get_undo_history(state: State<'_, AppState>) -> Result<Vec<HistoryItem>, String> {
+pub fn get_undo_history(state: State<'_, crate::AppState>) -> Result<Vec<HistoryItem>, String> {
     let doc_state = state
         .document_state
         .lock()
@@ -143,7 +149,7 @@ pub fn get_undo_history(state: State<'_, AppState>) -> Result<Vec<HistoryItem>, 
 
 /// Command: Get the redo history for display in UI
 #[tauri::command]
-pub fn get_redo_history(state: State<'_, AppState>) -> Result<Vec<HistoryItem>, String> {
+pub fn get_redo_history(state: State<'_, crate::AppState>) -> Result<Vec<HistoryItem>, String> {
     let doc_state = state
         .document_state
         .lock()
@@ -163,23 +169,15 @@ pub fn get_redo_history(state: State<'_, AppState>) -> Result<Vec<HistoryItem>, 
 }
 
 /// Command: Check undo/redo availability and counts
-#[derive(Debug, Serialize, Deserialize)]
-pub struct HistoryState {
-    pub can_undo: bool,
-    pub can_redo: bool,
-    pub undo_count: usize,
-    pub redo_count: usize,
-}
-
 #[tauri::command]
-pub fn get_history_state(state: State<'_, AppState>) -> Result<HistoryState, String> {
+pub fn get_history_state(state: State<'_, crate::AppState>) -> Result<HistoryStateResponse, String> {
     let doc_state = state
         .document_state
         .lock()
         .map_err(|e| format!("Failed to acquire lock: {}", e))?;
 
     match &*doc_state {
-        Some(state) => Ok(HistoryState {
+        Some(state) => Ok(HistoryStateResponse {
             can_undo: state.can_undo(),
             can_redo: state.can_redo(),
             undo_count: state.history.undo_count(),

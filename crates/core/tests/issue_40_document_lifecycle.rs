@@ -99,11 +99,15 @@ fn test_issue_40_unsupported_file_version() {
                 "modified_at": 0,
                 "dpi": 300,
                 "default_unit": "Millimeter",
-                "default_bleed": {"top": {"Pt": 0}, "bottom": {"Pt": 0}, "inside": {"Pt": 0}, "outside": {"Pt": 0}},
+                "default_bleed": {"top": 0.0, "bottom": 0.0, "inside": 0.0, "outside": 0.0},
                 "color_profile": "sRGB"
             },
             "swatches": [],
-            "styles": {},
+            "styles": {
+                "paragraph_styles": [],
+                "character_styles": [],
+                "object_styles": []
+            },
             "spreads": []
         }
     }"#;

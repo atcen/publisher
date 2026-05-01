@@ -24,7 +24,10 @@ pub struct AppState {
 /// Create a new empty document
 #[tauri::command]
 async fn new_document(state: tauri::State<'_, AppState>) -> Result<String, String> {
-    let mut service = state.document_service.lock().unwrap();
+    let mut service = state
+        .document_service
+        .lock()
+        .map_err(|e| format!("Failed to acquire lock: {}", e))?;
     match service.create_new("Untitled") {
         Ok(id) => Ok(json!({
             "success": true,
@@ -50,8 +53,15 @@ async fn open_document<R: Runtime>(
         .blocking_pick_file();
     match file_path {
         Some(path) => {
-            let path_str = path.to_string();
-            let mut service = state.document_service.lock().unwrap();
+            let mut path_str = path.to_string();
+            // Ensure .publisher extension
+            if !path_str.ends_with(".publisher") {
+                path_str = format!("{}.publisher", path_str);
+            }
+            let mut service = state
+                .document_service
+                .lock()
+                .map_err(|e| format!("Failed to acquire lock: {}", e))?;
 
             match service.open_document(&path_str) {
                 Ok(id) => {
@@ -161,16 +171,26 @@ async fn save_document_as<R: Runtime>(
 
     match file_path {
         Some(path) => {
-            let path_str = path.to_string();
-            let mut service = state.document_service.lock().unwrap();
+            let mut path_str = path.to_string();
+            // Ensure .publisher extension
+            if !path_str.ends_with(".publisher") {
+                path_str = format!("{}.publisher", path_str);
+            }
+            let mut service = state
+                .document_service
+                .lock()
+                .map_err(|e| format!("Failed to acquire lock: {}", e))?;
 
             match service.save_document_as(doc_id, &path_str) {
-                Ok(saved_path) => Ok(json!({
-                    "success": true,
-                    "file_path": saved_path,
-                    "message": "Document saved successfully"
-                })
-                .to_string()),
+                Ok(saved_path) => {
+                    // Ensure document is marked clean after successful save
+                    Ok(json!({
+                        "success": true,
+                        "file_path": saved_path,
+                        "message": "Document saved successfully"
+                    })
+                    .to_string())
+                }
                 Err(e) => Err(format!("Save As failed: {}", e)),
             }
         }
@@ -252,7 +272,10 @@ async fn close_document(
         uuid::Uuid::parse_str(&document_id).map_err(|_| "Invalid document ID".to_string())?,
     );
 
-    let mut service = state.document_service.lock().unwrap();
+    let mut service = state
+        .document_service
+        .lock()
+        .map_err(|e| format!("Failed to acquire lock: {}", e))?;
     let has_unsaved = service.has_unsaved_changes(doc_id);
 
     match service.close_document(doc_id) {
@@ -276,14 +299,20 @@ async fn check_unsaved_changes(
         uuid::Uuid::parse_str(&document_id).map_err(|_| "Invalid document ID".to_string())?,
     );
 
-    let service = state.document_service.lock().unwrap();
+    let service = state
+        .document_service
+        .lock()
+        .map_err(|e| format!("Failed to acquire lock: {}", e))?;
     Ok(service.has_unsaved_changes(doc_id))
 }
 
 /// List all open documents
 #[tauri::command]
 async fn list_documents(state: tauri::State<'_, AppState>) -> Result<String, String> {
-    let service = state.document_service.lock().unwrap();
+    let service = state
+        .document_service
+        .lock()
+        .map_err(|e| format!("Failed to acquire lock: {}", e))?;
     let docs = service.list_documents();
 
     let doc_list: Vec<_> = docs
@@ -313,7 +342,10 @@ async fn mark_document_modified(
         uuid::Uuid::parse_str(&document_id).map_err(|_| "Invalid document ID".to_string())?,
     );
 
-    let mut service = state.document_service.lock().unwrap();
+    let mut service = state
+        .document_service
+        .lock()
+        .map_err(|e| format!("Failed to acquire lock: {}", e))?;
     service.mark_modified(doc_id);
 
     Ok(json!({
