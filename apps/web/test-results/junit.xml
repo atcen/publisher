@@ -1,0 +1,26 @@
+<testsuites id="" name="" tests="9" failures="0" skipped="0" errors="0" time="7.180357">
+<testsuite name="smoke.spec.ts" timestamp="2026-05-01T10:35:08.973Z" hostname="chromium" tests="3" failures="0" skipped="0" time="1.535" errors="0">
+<testcase name="Smoke Test › Page loads and responds" classname="smoke.spec.ts" time="0.516">
+</testcase>
+<testcase name="Smoke Test › App container exists in DOM" classname="smoke.spec.ts" time="0.504">
+</testcase>
+<testcase name="Smoke Test › Page HTML structure is valid" classname="smoke.spec.ts" time="0.515">
+</testcase>
+</testsuite>
+<testsuite name="smoke.spec.ts" timestamp="2026-05-01T10:35:08.973Z" hostname="firefox" tests="3" failures="0" skipped="0" time="4.476" errors="0">
+<testcase name="Smoke Test › Page loads and responds" classname="smoke.spec.ts" time="1.657">
+</testcase>
+<testcase name="Smoke Test › App container exists in DOM" classname="smoke.spec.ts" time="1.208">
+</testcase>
+<testcase name="Smoke Test › Page HTML structure is valid" classname="smoke.spec.ts" time="1.611">
+</testcase>
+</testsuite>
+<testsuite name="smoke.spec.ts" timestamp="2026-05-01T10:35:08.973Z" hostname="webkit" tests="3" failures="0" skipped="0" time="2.238" errors="0">
+<testcase name="Smoke Test › Page loads and responds" classname="smoke.spec.ts" time="1.426">
+</testcase>
+<testcase name="Smoke Test › App container exists in DOM" classname="smoke.spec.ts" time="0.341">
+</testcase>
+<testcase name="Smoke Test › Page HTML structure is valid" classname="smoke.spec.ts" time="0.471">
+</testcase>
+</testsuite>
+</testsuites>
