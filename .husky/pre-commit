@@ -1,4 +1,5 @@
 #!/bin/sh
+set -e
 
 echo "🔍 Running local tests before commit..."
 
@@ -13,14 +14,5 @@ cargo clippy --workspace --all-targets -- -D warnings || exit 1
 # Run cargo fmt check
 echo "📐 Checking formatting..."
 cargo fmt --check || exit 1
-
-# Check coverage (non-blocking, just informational)
-echo ""
-echo "📊 Checking test coverage..."
-if command -v cargo-tarpaulin &> /dev/null; then
-  cargo tarpaulin --workspace --skip-clean --timeout 300 --out Stdout 2>/dev/null | grep "Coverage:" || true
-else
-  echo "⚠️  cargo-tarpaulin not installed, skipping coverage check"
-fi
 
 echo "✅ All checks passed!"
