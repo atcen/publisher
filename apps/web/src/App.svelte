@@ -201,9 +201,8 @@
                     <div
                       class="frame text-frame"
                       class:selected={selectedFrameId === frame.id}
-                      onclick={(e) => { e.stopPropagation(); selectedFrameId = frame.id; markDocumentAsChanged(); }}
+                      onclick={(e) => { e.stopPropagation(); selectedFrameId = frame.id; }}
                       style="left: {frame.Text.x}px; top: {frame.Text.y}px; width: {frame.Text.width}px; height: {frame.Text.height}px;"
-                      on:input={markDocumentAsChanged}
                     >
                       {frame.Text.content}
                     </div>
