@@ -7,6 +7,9 @@ use std::path::Path;
 use tauri::Runtime;
 use tauri_plugin_dialog::DialogExt;
 
+mod commands;
+use commands::{AppState, undo, redo, get_undo_history, get_redo_history, get_history_state};
+
 #[tauri::command]
 async fn open_file<R: Runtime>(app: tauri::AppHandle<R>) -> Result<String, String> {
     let file_path = app.dialog().file().blocking_pick_file();
@@ -43,7 +46,7 @@ async fn save_document<R: Runtime>(
         ".{}.tmp",
         path.file_stem()
             .ok_or("Invalid filename")?
-            .to_string_loshy()
+            .to_string_lossy()
     ));
 
     let mut temp_file =
@@ -56,6 +59,12 @@ async fn save_document<R: Runtime>(
     temp_file
         .sync_all()
         .map_err(|e| format!("Failed to sync temp file: {}", e))?;
+
+    // On Windows, rename fails if the target exists, so remove it first
+    if Path::new(&file_path).exists() {
+        fs::remove_file(&file_path)
+            .map_err(|e| format!("Failed to remove existing file: {}", e))?;
+    }
 
     fs::rename(&temp_path, &file_path)
         .map_err(|e| format!("Failed to replace file: {}", e))?;
@@ -97,7 +106,7 @@ async fn save_as_file<R: Runtime>(
                 path_obj
                     .file_stem()
                     .ok_or("Invalid filename")?
-                    .to_string_loshy()
+                    .to_string_lossy()
             ));
 
             let mut temp_file = fs::File::create(&temp_path)
@@ -110,6 +119,12 @@ async fn save_as_file<R: Runtime>(
             temp_file
                 .sync_all()
                 .map_err(|e| format!("Failed to sync temp file: {}", e))?;
+
+            // On Windows, rename fails if the target exists, so remove it first
+            if Path::new(&final_path).exists() {
+                fs::remove_file(&final_path)
+                    .map_err(|e| format!("Failed to remove existing file: {}", e))?;
+            }
 
             fs::rename(&temp_path, &final_path)
                 .map_err(|e| format!("Failed to replace file: {}", e))?;
@@ -127,11 +142,19 @@ fn main() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
+        .manage(AppState {
+            document_state: std::sync::Mutex::new(None),
+        })
         .invoke_handler(tauri::generate_handler![
             open_file,
             read_document,
             save_document,
-            save_as_file
+            save_as_file,
+            undo,
+            redo,
+            get_undo_history,
+            get_redo_history,
+            get_history_state
         ])
         .setup(|_app| Ok(()))
         .run(tauri::generate_context!())

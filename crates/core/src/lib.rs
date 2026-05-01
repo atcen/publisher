@@ -1,8 +1,12 @@
 pub mod builder;
 pub mod paper;
 pub mod units;
+pub mod history;
+pub mod document_state;
 
 pub use crate::units::{Pt, Unit};
+pub use history::{History, Action};
+pub use document_state::DocumentState;
 use serde::{Deserialize, Serialize};
 
 pub fn init() {
