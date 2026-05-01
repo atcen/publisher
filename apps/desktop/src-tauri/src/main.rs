@@ -8,6 +8,7 @@ use commands::{get_history_state, get_redo_history, get_undo_history, redo, undo
 use document_service::{DocumentService, DocumentServiceError};
 use publisher_core::DocumentState;
 use serde_json::json;
+use std::fs;
 use std::sync::Mutex;
 use tauri::Runtime;
 use tauri_plugin_dialog::DialogExt;
