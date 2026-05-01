@@ -27,6 +27,39 @@ jobs:
       - name: Run tests
         run: cargo test --workspace
 
+  e2e:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install dependencies
+        run: npm install --prefix apps/web
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps
+        working-directory: apps/web
+      - name: Run E2E tests
+        run: npm run test:e2e
+        working-directory: apps/web
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-test-results
+          path: apps/web/test-results
+          if-no-files-found: ignore
+      - name: Upload playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-playwright-report
+          path: apps/web/playwright-report
+          if-no-files-found: ignore
+
   lint:
     name: Lint & Format
     runs-on: ubuntu-latest

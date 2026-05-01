@@ -85,6 +85,7 @@
 
     <!-- Klick auf Workspace hebt Auswahl auf -->
     <div class="workspace-container" onclick={() => selectedFrameId = null} role="presentation">
+      <canvas id="renderer-canvas"></canvas>
       <div class="workspace" style="--zoom: {zoom}">
         {#each doc.spreads as spread}
           <div class="spread">
