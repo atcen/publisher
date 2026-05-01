@@ -68,9 +68,11 @@ jobs:
         uses: Swatinem/rust-cache@v2
       - name: Check formatting
         run: cargo fmt --check
-      - name: Clean build cache
-        run: cargo clean
-      - name: Run clippy
+      - name: Run clippy on core
+        run: cargo clippy -p publisher_core -- -D warnings
+      - name: Run clippy on renderer
+        run: cargo clippy -p publisher_renderer -- -D warnings
+      - name: Run clippy on workspace
         run: cargo clippy --workspace -- -D warnings
 
   build-artifacts:
