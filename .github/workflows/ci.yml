@@ -59,7 +59,6 @@ jobs:
           execute_install_scripts: true
       - name: Install dependencies
         run: |
-          sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev libgtk-3-dev libgdk-pixbuf2.0-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libcairo-dev libpango-1.0-0 libpangocairo-1.0-0 libxcb-dri3-dev libxdamage-dev
       - name: Set PKG_CONFIG_PATH
         run: echo "PKG_CONFIG_PATH=/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/lib/pkgconfig:/usr/share/pkgconfig" >> $GITHUB_ENV
