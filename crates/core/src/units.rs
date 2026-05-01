@@ -9,7 +9,7 @@ pub const CM_PER_INCH: f64 = 2.54;
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
 pub enum Unit {
     #[default]
-    Point,      // pt (1/72 inch)
+    Point, // pt (1/72 inch)
     Millimeter, // mm
     Centimeter, // cm
     Inch,       // in
