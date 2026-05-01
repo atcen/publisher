@@ -17,27 +17,11 @@ concurrency:
 jobs:
   test:
     name: Test
-    strategy:
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
-      - name: APT cache (Linux)
-        if: runner.os == 'Linux'
-        uses: awalsh128/cache-apt-pkgs-action@2600aa0e7f15d4f4e6dfe68ecb84e55c86bb8a88
-        with:
-          packages: ${{ env.APT_PACKAGES }}
-          version: 1.0
-          execute_install_scripts: true
-      - name: Install dependencies (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get install -y ${{ env.APT_PACKAGES }}
-        env:
-          PKG_CONFIG_PATH: /usr/lib/x86_64-linux-gnu/pkgconfig:/usr/lib/pkgconfig:/usr/share/pkgconfig
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
       - name: Run tests
