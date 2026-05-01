@@ -221,15 +221,15 @@
         <div class="properties">
           <label>
             Inhalt
-            <textarea bind:value={selectedFrame.Text.content} on:input={markDocumentAsChanged}></textarea>
+            <textarea bind:value={selectedFrame.Text.content} onchange={markDocumentAsChanged}></textarea>
           </label>
           <div class="prop-group">
-            <label>X <input type="number" bind:value={selectedFrame.Text.x} on:input={markDocumentAsChanged} /></label>
-            <label>Y <input type="number" bind:value={selectedFrame.Text.y} on:input={markDocumentAsChanged} /></label>
+            <label>X <input type="number" bind:value={selectedFrame.Text.x} onchange={markDocumentAsChanged} /></label>
+            <label>Y <input type="number" bind:value={selectedFrame.Text.y} onchange={markDocumentAsChanged} /></label>
           </div>
           <div class="prop-group">
-            <label>W <input type="number" bind:value={selectedFrame.Text.width} on:input={markDocumentAsChanged} /></label>
-            <label>H <input type="number" bind:value={selectedFrame.Text.height} on:input={markDocumentAsChanged} /></label>
+            <label>W <input type="number" bind:value={selectedFrame.Text.width} onchange={markDocumentAsChanged} /></label>
+            <label>H <input type="number" bind:value={selectedFrame.Text.height} onchange={markDocumentAsChanged} /></label>
           </div>
         </div>
       {:else}

@@ -543,10 +543,12 @@ mod tests {
 
     #[test]
     fn test_paragraph_style_mutation() {
-        let mut style = ParagraphStyle::default();
-        style.font_size = Pt(16.0);
-        style.leading = Pt(19.2);
-        style.alignment = TextAlignment::Center;
+        let style = ParagraphStyle {
+            font_size: Pt(16.0),
+            leading: Pt(19.2),
+            alignment: TextAlignment::Center,
+            ..Default::default()
+        };
 
         assert_eq!(style.font_size, Pt(16.0));
         assert_eq!(style.alignment, TextAlignment::Center);
