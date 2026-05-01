@@ -42,10 +42,25 @@ jobs:
       - name: Run tests
         run: cargo test --workspace
 
+  lint:
+    name: Lint & Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+      - name: Check formatting
+        run: cargo fmt --check
+      - name: Run clippy
+        run: cargo clippy --workspace -- -D warnings
 
   build-artifacts:
     name: Build (${{ matrix.name }})
-    needs: test
+    needs: [test, lint]
     if: github.event_name == 'push' || github.event_name == 'pull_request'
     strategy:
       fail-fast: false
