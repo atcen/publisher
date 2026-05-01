@@ -8,6 +8,7 @@ pub struct Action {
     pub id: String,
     pub description: String,
     pub timestamp: u64,
+    #[serde(with = "serde_bytes")]
     pub changeset: Vec<u8>,
 }
 
@@ -110,11 +111,15 @@ impl History {
     }
 
     pub fn jump_to_action(&mut self, target_id: &str) -> Option<Vec<Action>> {
-        let mut jumped_actions = Vec::new();
+        let mut jumped_actions: Vec<Action> = Vec::new();
 
         while !self.undo_stack.is_empty() {
             let action = self.undo_stack.back().cloned()?;
             if action.id == target_id {
+                // Rückgängig gemachte Aktionen zum Redo-Stack hinzufügen
+                for action in jumped_actions.iter() {
+                    self.redo_stack.push_back(action.clone());
+                }
                 return Some(jumped_actions);
             }
             if let Some(action) = self.undo_stack.pop_back() {

@@ -1,5 +1,0 @@
-@@ Cargo.toml
--uuid = { version = "1.23", features = ["v4", "serde"] }
-+uuid = { version = "1.23", features = ["v4", "serde"] }
-+serde_bytes = "0.11"
-+thiserror = "1.0"

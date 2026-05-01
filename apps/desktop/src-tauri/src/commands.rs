@@ -8,7 +8,7 @@ pub struct AppState {
     pub document_state: Mutex<Option<DocumentState>>,
 }
 
-/// Response for undo/redo operations
+/// Response for undo/redo operations with Action details
 #[derive(Debug, Serialize, Deserialize)]
 pub struct HistoryResponse {
     pub success: bool,
@@ -17,6 +17,17 @@ pub struct HistoryResponse {
     pub can_redo: bool,
     pub undo_count: usize,
     pub redo_count: usize,
+    pub action: Option<ActionData>,
+}
+
+/// Serializable action data returned to frontend
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ActionData {
+    pub id: String,
+    pub description: String,
+    pub timestamp: u64,
+    #[serde(with = "serde_bytes")]
+    pub changeset: Vec<u8>,
 }
 
 /// Command: Undo the last action
@@ -29,7 +40,13 @@ pub fn undo(state: State<'_, AppState>) -> Result<HistoryResponse, String> {
 
     match &mut *doc_state {
         Some(state) => {
-            if state.history.undo().is_some() {
+            if let Some(action) = state.history.undo() {
+                let action_data = ActionData {
+                    id: action.id.clone(),
+                    description: action.description.clone(),
+                    timestamp: action.timestamp,
+                    changeset: action.changeset.clone(),
+                };
                 Ok(HistoryResponse {
                     success: true,
                     message: "Undo successful".to_string(),
@@ -37,6 +54,7 @@ pub fn undo(state: State<'_, AppState>) -> Result<HistoryResponse, String> {
                     can_redo: state.can_redo(),
                     undo_count: state.history.undo_count(),
                     redo_count: state.history.redo_count(),
+                    action: Some(action_data),
                 })
             } else {
                 Ok(HistoryResponse {
@@ -46,6 +64,7 @@ pub fn undo(state: State<'_, AppState>) -> Result<HistoryResponse, String> {
                     can_redo: state.can_redo(),
                     undo_count: 0,
                     redo_count: state.history.redo_count(),
+                    action: None,
                 })
             }
         }
@@ -63,7 +82,13 @@ pub fn redo(state: State<'_, AppState>) -> Result<HistoryResponse, String> {
 
     match &mut *doc_state {
         Some(state) => {
-            if state.history.redo().is_some() {
+            if let Some(action) = state.history.redo() {
+                let action_data = ActionData {
+                    id: action.id.clone(),
+                    description: action.description.clone(),
+                    timestamp: action.timestamp,
+                    changeset: action.changeset.clone(),
+                };
                 Ok(HistoryResponse {
                     success: true,
                     message: "Redo successful".to_string(),
@@ -71,6 +96,7 @@ pub fn redo(state: State<'_, AppState>) -> Result<HistoryResponse, String> {
                     can_redo: state.can_redo(),
                     undo_count: state.history.undo_count(),
                     redo_count: state.history.redo_count(),
+                    action: Some(action_data),
                 })
             } else {
                 Ok(HistoryResponse {
@@ -80,6 +106,7 @@ pub fn redo(state: State<'_, AppState>) -> Result<HistoryResponse, String> {
                     can_redo: false,
                     undo_count: state.history.undo_count(),
                     redo_count: 0,
+                    action: None,
                 })
             }
         }
@@ -175,6 +202,7 @@ mod tests {
             can_redo: false,
             undo_count: 1,
             redo_count: 0,
+            action: None,
         };
         assert!(resp.success);
         assert!(resp.can_undo);

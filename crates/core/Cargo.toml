@@ -7,6 +7,8 @@ license.workspace = true
 [dependencies]
 serde.workspace = true
 automerge.workspace = true
+uuid.workspace = true
+serde_bytes = "0.11"
 
 # For WASM builds: add js feature to UUID for JavaScript-based RNG
 # UUID is a transitive dependency of automerge; this configuration ensures
