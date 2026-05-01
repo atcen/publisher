@@ -68,12 +68,8 @@ jobs:
         uses: Swatinem/rust-cache@v2
       - name: Check formatting
         run: cargo fmt --check
-      - name: Run clippy on core
-        run: cargo clippy -p publisher_core -- -D warnings
-      - name: Run clippy on renderer
-        run: cargo clippy -p publisher_renderer -- -D warnings
-      - name: Run clippy on workspace
-        run: cargo clippy --workspace -- -D warnings
+      - name: Run clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
 
   build-artifacts:
     name: Build (${{ matrix.name }})
