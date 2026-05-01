@@ -66,6 +66,8 @@ jobs:
         uses: Swatinem/rust-cache@v2
       - name: Check formatting
         run: cargo fmt --check
+      - name: Build workspace
+        run: cargo build --workspace
       - name: Run clippy
         run: cargo clippy --workspace -- -D warnings
 
