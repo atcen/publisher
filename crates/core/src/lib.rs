@@ -1,7 +1,5 @@
 pub mod builder;
-pub mod document_manager;
 pub mod paper;
-pub mod persistence;
 pub mod units;
 
 pub use crate::units::{Pt, Unit};
