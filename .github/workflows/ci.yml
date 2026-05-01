@@ -27,7 +27,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
       - name: APT cache (Linux)
         if: runner.os == 'Linux'
-        uses: awalsh128/cache-apt-pkgs-action@v1
+        uses: awalsh128/cache-apt-pkgs-action@2600aa0e7f15d4f4e6dfe68ecb84e55c86bb8a88
         with:
           packages: ${{ env.APT_PACKAGES }}
           version: 1.0
@@ -56,7 +56,7 @@ jobs:
         run: cargo fmt --check
       - name: APT cache (Linux)
         if: runner.os == 'Linux'
-        uses: awalsh128/cache-apt-pkgs-action@v1
+        uses: awalsh128/cache-apt-pkgs-action@2600aa0e7f15d4f4e6dfe68ecb84e55c86bb8a88
         with:
           packages: ${{ env.APT_PACKAGES }}
           version: 1.0
@@ -70,7 +70,7 @@ jobs:
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
       - name: Run clippy
-        run: cargo clippy --workspace -- -D warnings
+        run: cargo clippy --workspace --all-targets -- -D warnings
 
   build-artifacts:
     name: Build (${{ matrix.name }})
@@ -100,7 +100,7 @@ jobs:
 
       - name: APT cache (Linux)
         if: runner.os == 'Linux'
-        uses: awalsh128/cache-apt-pkgs-action@v1
+        uses: awalsh128/cache-apt-pkgs-action@2600aa0e7f15d4f4e6dfe68ecb84e55c86bb8a88
         with:
           packages: ${{ env.APT_PACKAGES }}
           version: 1.0
