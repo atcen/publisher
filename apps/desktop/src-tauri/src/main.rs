@@ -2,16 +2,23 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod document_service;
+mod commands;
 
 use document_service::{DocumentService, DocumentServiceError};
+use commands::{undo, redo, get_undo_history, get_redo_history, get_history_state};
 use serde_json::json;
+use std::fs;
+use std::io::Write;
+use std::path::Path;
 use std::sync::Mutex;
 use tauri::Runtime;
 use tauri_plugin_dialog::DialogExt;
+use publisher_core::DocumentState;
 
-/// Application state containing the document service
+/// Application state containing both document service and history/undo-redo state
 pub struct AppState {
-    document_service: Mutex<DocumentService>,
+    pub document_service: Mutex<DocumentService>,
+    pub document_state: Mutex<Option<DocumentState>>,
 }
 
 /// Create a new empty document
@@ -41,7 +48,6 @@ async fn open_document<R: Runtime>(
         .file()
         .add_filter("Publisher", &["publisher"])
         .blocking_pick_file();
-
     match file_path {
         Some(path) => {
             let path_str = path.to_string();
@@ -80,27 +86,59 @@ async fn open_document<R: Runtime>(
     }
 }
 
+/// Read document from file
+#[tauri::command]
+async fn read_document<R: Runtime>(
+    _app: tauri::AppHandle<R>,
+    file_path: String,
+) -> Result<String, String> {
+    fs::read_to_string(&file_path)
+        .map_err(|e| format!("Failed to read file: {}", e))
+}
+
 /// Save the active document
 #[tauri::command]
-async fn save_document(
-    state: tauri::State<'_, AppState>,
-    document_id: String,
+async fn save_document_file<R: Runtime>(
+    _app: tauri::AppHandle<R>,
+    file_path: String,
+    document_json: String,
 ) -> Result<String, String> {
-    let doc_id = publisher_core::document_manager::DocumentId(
-        uuid::Uuid::parse_str(&document_id).map_err(|_| "Invalid document ID".to_string())?,
-    );
+    serde_json::from_str::<serde_json::Value>(&document_json)
+        .map_err(|e| format!("Invalid document JSON: {}", e))?;
 
-    let mut service = state.document_service.lock().unwrap();
+    let path = Path::new(&file_path);
+    let parent = path.parent().ok_or("Invalid file path")?;
 
-    match service.save_document(doc_id) {
-        Ok(path) => Ok(json!({
-            "success": true,
-            "file_path": path,
-            "message": "Document saved successfully"
-        })
-        .to_string()),
-        Err(e) => Err(format!("Save failed: {}", e)),
+    fs::create_dir_all(parent).map_err(|e| format!("Failed to create directory: {}", e))?;
+
+    let temp_path = parent.join(format!(
+        ".{}.tmp",
+        path.file_stem()
+            .ok_or("Invalid filename")?
+            .to_string_lossy()
+    ));
+
+    let mut temp_file =
+        fs::File::create(&temp_path).map_err(|e| format!("Failed to create temp file: {}", e))?;
+
+    temp_file
+        .write_all(document_json.as_bytes())
+        .map_err(|e| format!("Failed to write to temp file: {}", e))?;
+
+    temp_file
+        .sync_all()
+        .map_err(|e| format!("Failed to sync temp file: {}", e))?;
+
+    // On Windows, rename fails if the target exists, so remove it first
+    if Path::new(&file_path).exists() {
+        fs::remove_file(&file_path)
+            .map_err(|e| format!("Failed to remove existing file: {}", e))?;
     }
+
+    fs::rename(&temp_path, &file_path)
+        .map_err(|e| format!("Failed to replace file: {}", e))?;
+
+    Ok(file_path)
 }
 
 /// Save document with a new path (Save As)
@@ -135,6 +173,70 @@ async fn save_document_as<R: Runtime>(
                 .to_string()),
                 Err(e) => Err(format!("Save As failed: {}", e)),
             }
+        }
+        None => Err("Save cancelled".to_string()),
+    }
+}
+
+/// Save document via JSON (alternative save method)
+#[tauri::command]
+async fn save_as_file<R: Runtime>(
+    app: tauri::AppHandle<R>,
+    document_json: String,
+) -> Result<String, String> {
+    serde_json::from_str::<serde_json::Value>(&document_json)
+        .map_err(|e| format!("Invalid document JSON: {}", e))?;
+
+    let file_path = app
+        .dialog()
+        .file()
+        .add_filter("Publisher Documents", &["publisher"])
+        .blocking_save_file();
+
+    match file_path {
+        Some(path) => {
+            let path_str = path.to_string();
+            let final_path = if !path_str.ends_with(".publisher") {
+                format!("{}.publisher", path_str)
+            } else {
+                path_str
+            };
+
+            let path_obj = Path::new(&final_path);
+            let parent = path_obj.parent().ok_or("Invalid file path")?;
+
+            fs::create_dir_all(parent)
+                .map_err(|e| format!("Failed to create directory: {}", e))?;
+
+            let temp_path = parent.join(format!(
+                ".{}.tmp",
+                path_obj
+                    .file_stem()
+                    .ok_or("Invalid filename")?
+                    .to_string_lossy()
+            ));
+
+            let mut temp_file = fs::File::create(&temp_path)
+                .map_err(|e| format!("Failed to create temp file: {}", e))?;
+
+            temp_file
+                .write_all(document_json.as_bytes())
+                .map_err(|e| format!("Failed to write to temp file: {}", e))?;
+
+            temp_file
+                .sync_all()
+                .map_err(|e| format!("Failed to sync temp file: {}", e))?;
+
+            // On Windows, rename fails if the target exists, so remove it first
+            if Path::new(&final_path).exists() {
+                fs::remove_file(&final_path)
+                    .map_err(|e| format!("Failed to remove existing file: {}", e))?;
+            }
+
+            fs::rename(&temp_path, &final_path)
+                .map_err(|e| format!("Failed to replace file: {}", e))?;
+
+            Ok(final_path)
         }
         None => Err("Save cancelled".to_string()),
     }
@@ -230,16 +332,27 @@ fn main() {
         .plugin(tauri_plugin_fs::init())
         .manage(AppState {
             document_service: Mutex::new(DocumentService::new()),
+            document_state: Mutex::new(None),
         })
         .invoke_handler(tauri::generate_handler![
+            // Document lifecycle commands
             new_document,
             open_document,
-            save_document,
             save_document_as,
             close_document,
             check_unsaved_changes,
             list_documents,
             mark_document_modified,
+            // Alternative file operations
+            read_document,
+            save_document_file,
+            save_as_file,
+            // Undo/Redo commands
+            undo,
+            redo,
+            get_undo_history,
+            get_redo_history,
+            get_history_state
         ])
         .setup(|_app| Ok(()))
         .run(tauri::generate_context!())
