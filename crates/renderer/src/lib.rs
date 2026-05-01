@@ -1,8 +1,8 @@
-use vello::{Scene, Renderer, RendererOptions};
-use vello::kurbo::{Rect, Point, Circle, Affine};
-use vello::peniko::{Color, Fill};
-use publisher_core::{Document, Frame, Page, TextFrame, ImageFrame, ShapeFrame, ShapeType};
+use publisher_core::{Document, Frame, ImageFrame, Page, ShapeFrame, ShapeType, TextFrame};
 use std::time::{Duration, Instant};
+use vello::kurbo::{Affine, Circle, Point, Rect};
+use vello::peniko::{Color, Fill};
+use vello::{Renderer, RendererOptions, Scene};
 
 pub struct VelloRenderer {
     pub renderer: Option<Renderer>,
@@ -36,12 +36,7 @@ impl VelloRenderer {
         })
     }
 
-    pub fn render_document(
-        &mut self,
-        document: &Document,
-        spread_index: usize,
-        zoom: f64,
-    ) -> bool {
+    pub fn render_document(&mut self, document: &Document, spread_index: usize, zoom: f64) -> bool {
         // Early return if spread_index is out of bounds (don't update stats for invalid renders)
         if spread_index >= document.spreads.len() {
             return false;
@@ -161,14 +156,8 @@ impl VelloRenderer {
                     let ellipse = Circle::new(Point::new(cx, cy), max_r);
                     let sx = rx / max_r;
                     let sy = ry / max_r;
-                    let transform = Affine::new([
-                        sx,
-                        0.0,
-                        0.0,
-                        sy,
-                        cx * (1.0 - sx),
-                        cy * (1.0 - sy),
-                    ]);
+                    let transform =
+                        Affine::new([sx, 0.0, 0.0, sy, cx * (1.0 - sx), cy * (1.0 - sy)]);
                     self.scene.fill(
                         Fill::NonZero,
                         transform,
@@ -192,16 +181,13 @@ impl VelloRenderer {
         }
     }
 
-
     pub fn get_last_render_time(&self) -> Duration {
         self.last_render_time
     }
 
     pub fn get_average_render_time(&self) -> Duration {
         if self.frame_count > 0 {
-            Duration::from_secs_f64(
-                self.total_render_time.as_secs_f64() / self.frame_count as f64
-            )
+            Duration::from_secs_f64(self.total_render_time.as_secs_f64() / self.frame_count as f64)
         } else {
             Duration::ZERO
         }
@@ -220,7 +206,7 @@ pub fn create_renderer(device: &wgpu::Device) -> Result<VelloRenderer, vello::Er
 #[cfg(test)]
 mod tests {
     use super::*;
-    use publisher_core::{Bleed, Margins, Metadata, Spread, Styles, Pt, Unit};
+    use publisher_core::{Bleed, Margins, Metadata, Pt, Spread, Styles, Unit};
 
     #[test]
     fn test_renderer_init() {
@@ -240,15 +226,13 @@ mod tests {
                 inside: Pt(0.0),
                 outside: Pt(0.0),
             },
-            frames: vec![
-                Frame::Text(TextFrame::new(
-                    Pt(10.0),
-                    Pt(10.0),
-                    Pt(100.0),
-                    Pt(50.0),
-                    "Hello World",
-                )),
-            ],
+            frames: vec![Frame::Text(TextFrame::new(
+                Pt(10.0),
+                Pt(10.0),
+                Pt(100.0),
+                Pt(50.0),
+                "Hello World",
+            ))],
         };
 
         let spread = Spread { pages: vec![page] };
@@ -292,15 +276,13 @@ mod tests {
                 inside: Pt(0.0),
                 outside: Pt(0.0),
             },
-            frames: vec![
-                Frame::Image(ImageFrame::new(
-                    Pt(10.0),
-                    Pt(10.0),
-                    Pt(100.0),
-                    Pt(100.0),
-                    "test.png",
-                )),
-            ],
+            frames: vec![Frame::Image(ImageFrame::new(
+                Pt(10.0),
+                Pt(10.0),
+                Pt(100.0),
+                Pt(100.0),
+                "test.png",
+            ))],
         };
 
         let spread = Spread { pages: vec![page] };
@@ -328,8 +310,14 @@ mod tests {
 
         let rendered = renderer.render_document(&doc, 0, 1.0);
         // Verify render completed successfully
-        assert!(rendered, "render_document should return true for valid spread_index");
-        assert_eq!(renderer.frame_count, 1, "frame_count tracks completed render_document calls");
+        assert!(
+            rendered,
+            "render_document should return true for valid spread_index"
+        );
+        assert_eq!(
+            renderer.frame_count, 1,
+            "frame_count tracks completed render_document calls"
+        );
     }
 
     #[test]
@@ -345,15 +333,13 @@ mod tests {
                 inside: Pt(36.0),
                 outside: Pt(36.0),
             },
-            frames: vec![
-                Frame::Text(TextFrame::new(
-                    Pt(50.0),
-                    Pt(50.0),
-                    Pt(500.0),
-                    Pt(100.0),
-                    "Test Page",
-                )),
-            ],
+            frames: vec![Frame::Text(TextFrame::new(
+                Pt(50.0),
+                Pt(50.0),
+                Pt(500.0),
+                Pt(100.0),
+                "Test Page",
+            ))],
         };
 
         let spread = Spread { pages: vec![page] };
@@ -381,8 +367,14 @@ mod tests {
 
         let rendered = renderer.render_document(&doc, 0, 1.0);
         // Verify render completed successfully
-        assert!(rendered, "render_document should return true for valid spread_index");
-        assert_eq!(renderer.frame_count, 1, "frame_count tracks completed render_document calls");
+        assert!(
+            rendered,
+            "render_document should return true for valid spread_index"
+        );
+        assert_eq!(
+            renderer.frame_count, 1,
+            "frame_count tracks completed render_document calls"
+        );
     }
 
     #[test]
@@ -403,15 +395,13 @@ mod tests {
                     inside: Pt(36.0),
                     outside: Pt(36.0),
                 },
-                frames: vec![
-                    Frame::Text(TextFrame::new(
-                        Pt(50.0),
-                        Pt(50.0),
-                        Pt(500.0),
-                        Pt(100.0),
-                        &format!("Page {}", i + 1),
-                    )),
-                ],
+                frames: vec![Frame::Text(TextFrame::new(
+                    Pt(50.0),
+                    Pt(50.0),
+                    Pt(500.0),
+                    Pt(100.0),
+                    &format!("Page {}", i + 1),
+                ))],
             })
             .collect();
 
@@ -434,7 +424,10 @@ mod tests {
             },
             swatches: vec![],
             styles: Styles::default(),
-            spreads: pages.into_iter().map(|p| Spread { pages: vec![p] }).collect(),
+            spreads: pages
+                .into_iter()
+                .map(|p| Spread { pages: vec![p] })
+                .collect(),
         };
 
         // Render all pages and measure scene-building performance
@@ -445,8 +438,11 @@ mod tests {
         let total_time = start.elapsed();
         let avg_time_per_page = total_time.as_secs_f64() / doc.spreads.len() as f64;
 
-        println!("50-page render time: {:.3}ms per page, {:.3}ms total",
-                 avg_time_per_page * 1000.0, total_time.as_secs_f64() * 1000.0);
+        println!(
+            "50-page render time: {:.3}ms per page, {:.3}ms total",
+            avg_time_per_page * 1000.0,
+            total_time.as_secs_f64() * 1000.0
+        );
         // No hard assertions—for profiling only
     }
 
@@ -456,8 +452,14 @@ mod tests {
         let renderer = VelloRenderer::new(None).expect("Failed to create renderer");
 
         // New renderer should start with no renders tracked
-        assert_eq!(renderer.frame_count, 0, "New renderer should start with frame_count=0");
-        assert!(renderer.renderer.is_none(), "Device-less renderer should have renderer=None");
+        assert_eq!(
+            renderer.frame_count, 0,
+            "New renderer should start with frame_count=0"
+        );
+        assert!(
+            renderer.renderer.is_none(),
+            "Device-less renderer should have renderer=None"
+        );
 
         // NOTE: Verifying RendererOptions (AaSupport::all()) requires a real wgpu::Device
         // and would belong in an integration test with actual GPU rendering.

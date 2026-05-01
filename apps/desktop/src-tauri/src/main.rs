@@ -7,11 +7,9 @@ use tauri_plugin_dialog::DialogExt;
 #[tauri::command]
 async fn open_file<R: Runtime>(app: tauri::AppHandle<R>) -> Result<String, String> {
     let file_path = app.dialog().file().blocking_pick_file();
-    
+
     match file_path {
-        Some(path) => {
-            Ok(path.to_string())
-        }
+        Some(path) => Ok(path.to_string()),
         None => Err("No file selected".to_string()),
     }
 }
@@ -19,11 +17,9 @@ async fn open_file<R: Runtime>(app: tauri::AppHandle<R>) -> Result<String, Strin
 #[tauri::command]
 async fn save_file<R: Runtime>(app: tauri::AppHandle<R>) -> Result<String, String> {
     let file_path = app.dialog().file().blocking_save_file();
-    
+
     match file_path {
-        Some(path) => {
-            Ok(path.to_string())
-        }
+        Some(path) => Ok(path.to_string()),
         None => Err("Save cancelled".to_string()),
     }
 }
@@ -36,9 +32,7 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .invoke_handler(tauri::generate_handler![open_file, save_file])
-        .setup(|_app| {
-            Ok(())
-        })
+        .setup(|_app| Ok(()))
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

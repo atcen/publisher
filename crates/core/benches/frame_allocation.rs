@@ -1,5 +1,5 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
-use publisher_core::{Frame, TextFrame, ImageFrame, ShapeFrame, ShapeType, Page, Margins};
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
+use publisher_core::{Frame, ImageFrame, Margins, Page, ShapeFrame, ShapeType, TextFrame};
 
 fn bench_frame_creation(c: &mut Criterion) {
     let mut group = c.benchmark_group("frame_creation");
@@ -169,7 +169,13 @@ fn bench_frame_cloning(c: &mut Criterion) {
         b.iter(|| black_box(black_box(&image_frame).clone()))
     });
 
-    let shape_frame = Frame::Shape(ShapeFrame::new(0.0, 0.0, 100.0, 100.0, ShapeType::Rectangle));
+    let shape_frame = Frame::Shape(ShapeFrame::new(
+        0.0,
+        0.0,
+        100.0,
+        100.0,
+        ShapeType::Rectangle,
+    ));
     group.bench_function("clone_shape_frame", |b| {
         b.iter(|| black_box(black_box(&shape_frame).clone()))
     });

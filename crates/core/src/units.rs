@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::fmt;
-use std::ops::{Add, Sub, Mul, Div};
+use std::ops::{Add, Div, Mul, Sub};
 
 pub const POINTS_PER_INCH: f64 = 72.0;
 pub const MM_PER_INCH: f64 = 25.4;
@@ -234,11 +234,18 @@ mod tests {
         let test_value = 100.0; // mm
 
         // mm -> cm -> mm
-        let mm_to_cm = Unit::Millimeter.from_points(Unit::Millimeter.to_points(test_value, None), None);
+        let mm_to_cm =
+            Unit::Millimeter.from_points(Unit::Millimeter.to_points(test_value, None), None);
         assert!((mm_to_cm - test_value).abs() < 0.001);
 
         // mm -> in -> mm
-        let mm_to_in = Unit::Millimeter.from_points(Unit::Inch.to_points(Unit::Inch.from_points(Unit::Millimeter.to_points(test_value, None), None), None), None);
+        let mm_to_in = Unit::Millimeter.from_points(
+            Unit::Inch.to_points(
+                Unit::Inch.from_points(Unit::Millimeter.to_points(test_value, None), None),
+                None,
+            ),
+            None,
+        );
         assert!((mm_to_in - test_value).abs() < 0.001);
     }
 
