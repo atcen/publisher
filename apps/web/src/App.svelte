@@ -3,10 +3,38 @@
 
   type Pt = number;
 
+  interface TextFrame {
+    x: Pt;
+    y: Pt;
+    width: Pt;
+    height: Pt;
+    content: string;
+  }
+
+  interface Frame {
+    id: string;
+    Text?: TextFrame;
+  }
+
+  interface Page {
+    width: Pt;
+    height: Pt;
+    frames: Frame[];
+  }
+
+  interface Spread {
+    pages: Page[];
+  }
+
+  interface Document {
+    metadata: { name: string };
+    spreads: Spread[];
+  }
+
   let activeTool = $state('select');
   let zoom = $state(1);
   let selectedFrameId = $state<string | null>(null);
-  let doc = $state({
+  let doc = $state<Document>({
     metadata: { name: 'Untitled' },
     spreads: []
   });
@@ -31,7 +59,7 @@
     }
   }
 
-  let selectedFrame = $derived.by(() => {
+  let selectedFrame = $derived.by((): Frame | null => {
     for (const spread of doc.spreads) {
       for (const page of spread.pages) {
         for (const frame of page.frames) {
