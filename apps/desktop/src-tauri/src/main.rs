@@ -52,11 +52,12 @@ async fn open_document<R: Runtime>(
                     let doc = service
                         .get_document(id)
                         .ok_or("Failed to retrieve document")?;
+                    let doc_name = doc.metadata.name;
                     Ok(json!({
                         "success": true,
                         "document_id": id.0.to_string(),
-                        "document_name": doc.metadata.name,
-                        "message": format!("Opened: {}", doc.metadata.name)
+                        "document_name": doc_name,
+                        "message": format!("Opened: {}", doc_name)
                     })
                     .to_string())
                 }
