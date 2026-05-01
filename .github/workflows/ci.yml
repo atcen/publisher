@@ -67,7 +67,7 @@ jobs:
       - name: Check formatting
         run: cargo fmt --check
       - name: Run clippy
-        run: cargo clippy --workspace --verbose -- -D warnings 2>&1 | tee clippy_output.txt
+        run: cargo clippy --workspace -- -D warnings
 
   build-artifacts:
     name: Build (${{ matrix.name }})
