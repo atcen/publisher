@@ -26,7 +26,7 @@ fn test_issue_40_new_document_with_default_settings() {
 
     assert_eq!(doc.metadata.name, "Test Magazine");
     assert_eq!(doc.spreads.len(), 2); // 2 spreads for facing pages
-    assert!(doc.spreads[0].pages.len() > 0);
+    assert!(!doc.spreads[0].pages.is_empty());
     assert_eq!(doc.metadata.dpi, 300); // Default DPI
 }
 

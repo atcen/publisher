@@ -130,7 +130,7 @@ mod tests {
         let result = serialize_document(&doc);
         assert!(result.is_ok());
         let bytes = result.unwrap();
-        assert!(bytes.len() > 0);
+        assert!(!bytes.is_empty());
     }
 
     #[test]
