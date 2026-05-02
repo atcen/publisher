@@ -171,12 +171,49 @@ jobs:
         run: echo "PKG_CONFIG_PATH=/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/lib/pkgconfig:/usr/share/pkgconfig" >> $GITHUB_ENV
 
       - name: Build Desktop App Bundles
+        if: runner.os != 'macOS'
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           args: "--target ${{ matrix.target }}"
           projectPath: "apps/desktop"
+
+      - name: Build macOS App Bundle
+        if: runner.os == 'macOS'
+        run: npm --prefix apps/desktop run tauri -- build --target "${{ matrix.target }}" --bundles app
+
+      - name: Create macOS DMG
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          bundle_root="target/${{ matrix.target }}/release/bundle"
+          app_path="$bundle_root/macos/Publisher.app"
+          dmg_dir="$bundle_root/dmg"
+          staging_dir="${RUNNER_TEMP}/publisher-dmg-staging"
+          dmg_path="$dmg_dir/Publisher_${{ matrix.target }}.dmg"
+
+          if [ ! -d "$app_path" ]; then
+            echo "ERROR: expected macOS app bundle at $app_path"
+            find "$bundle_root" -maxdepth 4 -print 2>/dev/null || true
+            exit 1
+          fi
+
+          rm -rf "$staging_dir"
+          mkdir -p "$staging_dir" "$dmg_dir"
+          ditto "$app_path" "$staging_dir/Publisher.app"
+          ln -s /Applications "$staging_dir/Applications"
+          rm -f "$dmg_path"
+
+          hdiutil create \
+            -volname "Publisher" \
+            -srcfolder "$staging_dir" \
+            -ov \
+            -format UDZO \
+            -fs HFS+ \
+            "$dmg_path"
 
       - name: Validate macOS DMG
         if: runner.os == 'macOS'
@@ -194,7 +231,11 @@ jobs:
           }
           trap cleanup EXIT
 
-          mapfile -t dmg_files < <(find "$dmg_dir" -maxdepth 1 -type f -name "*.dmg" | sort)
+          dmg_files=()
+          while IFS= read -r dmg_file; do
+            dmg_files+=("$dmg_file")
+          done < <(find "$dmg_dir" -maxdepth 1 -type f -name "*.dmg" | sort)
+
           if [ "${#dmg_files[@]}" -ne 1 ]; then
             echo "ERROR: expected exactly one DMG in $dmg_dir, found ${#dmg_files[@]}"
             printf '  %s\n' "${dmg_files[@]}"
@@ -301,7 +342,11 @@ jobs:
           echo ""
 
           echo "=== Finding installer files ==="
-          mapfile -t installer_files < <(find release-files -type f \( -path "*/validated/dmg/*.dmg" -o -name "*.exe" -o -name "*.deb" -o -name "*.rpm" -o -name "*.AppImage" \))
+          installer_files=()
+          while IFS= read -r installer_file; do
+            installer_files+=("$installer_file")
+          done < <(find release-files -type f \( -path "*/validated/dmg/*.dmg" -o -name "*.exe" -o -name "*.deb" -o -name "*.rpm" -o -name "*.AppImage" \))
+
           echo "Found ${#installer_files[@]} files:"
           printf '  %s\n' "${installer_files[@]}"
           echo ""
