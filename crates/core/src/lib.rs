@@ -85,7 +85,10 @@ impl Document {
 
     pub fn set_pages(&mut self, pages: Vec<Page>) {
         self.spreads = vec![];
-        self.spreads = pages.into_iter().map(|p| Spread { pages: vec![p] }).collect();
+        self.spreads = pages
+            .into_iter()
+            .map(|p| Spread { pages: vec![p] })
+            .collect();
         self.reorganize_spreads();
     }
 }
@@ -100,7 +103,12 @@ pub struct ParentPage {
 
 impl ParentPage {
     pub fn new(id: &str, name: &str, spread: Spread) -> Self {
-        Self { id: id.to_string(), name: name.to_string(), spread, based_on_id: None }
+        Self {
+            id: id.to_string(),
+            name: name.to_string(),
+            spread,
+            based_on_id: None,
+        }
     }
 }
 
@@ -286,11 +294,24 @@ impl Page {
     }
 
     pub fn snap_targets(&self) -> Vec<SnapTarget> {
-        let mut targets = Vec::new();
-        targets.push(SnapTarget::Margin { position: self.margins.inside, side: Side::Left });
-        targets.push(SnapTarget::Margin { position: Pt(self.width.0 - self.margins.outside.0), side: Side::Right });
-        targets.push(SnapTarget::Margin { position: self.margins.top, side: Side::Top });
-        targets.push(SnapTarget::Margin { position: Pt(self.height.0 - self.margins.bottom.0), side: Side::Bottom });
+        let mut targets = vec![
+            SnapTarget::Margin {
+                position: self.margins.inside,
+                side: Side::Left,
+            },
+            SnapTarget::Margin {
+                position: Pt(self.width.0 - self.margins.outside.0),
+                side: Side::Right,
+            },
+            SnapTarget::Margin {
+                position: self.margins.top,
+                side: Side::Top,
+            },
+            SnapTarget::Margin {
+                position: Pt(self.height.0 - self.margins.bottom.0),
+                side: Side::Bottom,
+            },
+        ];
 
         let col_w = self.column_width().0;
         let gutter = self.gutter_width.0;
@@ -298,11 +319,22 @@ impl Page {
         for i in 0..self.column_count {
             let x_left = start_x + i as f64 * (col_w + gutter);
             let x_right = x_left + col_w;
-            targets.push(SnapTarget::Column { position: Pt(x_left), index: i, is_right: false });
-            targets.push(SnapTarget::Column { position: Pt(x_right), index: i, is_right: true });
+            targets.push(SnapTarget::Column {
+                position: Pt(x_left),
+                index: i,
+                is_right: false,
+            });
+            targets.push(SnapTarget::Column {
+                position: Pt(x_right),
+                index: i,
+                is_right: true,
+            });
         }
         for guide in &self.guides {
-            targets.push(SnapTarget::Guide { position: guide.position, orientation: guide.orientation });
+            targets.push(SnapTarget::Guide {
+                position: guide.position,
+                orientation: guide.orientation,
+            });
         }
         targets
     }
@@ -327,18 +359,42 @@ pub struct Guide {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum SnapTarget {
-    Margin { position: Pt, side: Side },
-    Column { position: Pt, index: u32, is_right: bool },
-    Guide { position: Pt, orientation: Orientation },
-    Object { position: Pt, orientation: Orientation, frame_id: String },
-    Baseline { position: Pt },
+    Margin {
+        position: Pt,
+        side: Side,
+    },
+    Column {
+        position: Pt,
+        index: u32,
+        is_right: bool,
+    },
+    Guide {
+        position: Pt,
+        orientation: Orientation,
+    },
+    Object {
+        position: Pt,
+        orientation: Orientation,
+        frame_id: String,
+    },
+    Baseline {
+        position: Pt,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum Side { Top, Bottom, Left, Right }
+pub enum Side {
+    Top,
+    Bottom,
+    Left,
+    Right,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum Orientation { Horizontal, Vertical }
+pub enum Orientation {
+    Horizontal,
+    Vertical,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Margins {
@@ -364,8 +420,28 @@ pub struct Frame {
 }
 
 impl Frame {
-    pub fn new(id: &str, layer_id: &str, x: Pt, y: Pt, width: Pt, height: Pt, data: FrameData) -> Self {
-        Self { id: id.to_string(), layer_id: layer_id.to_string(), x, y, width, height, rotation: 0.0, fill_color: None, stroke_color: None, stroke_width: Pt(0.0), data }
+    pub fn new(
+        id: &str,
+        layer_id: &str,
+        x: Pt,
+        y: Pt,
+        width: Pt,
+        height: Pt,
+        data: FrameData,
+    ) -> Self {
+        Self {
+            id: id.to_string(),
+            layer_id: layer_id.to_string(),
+            x,
+            y,
+            width,
+            height,
+            rotation: 0.0,
+            fill_color: None,
+            stroke_color: None,
+            stroke_width: Pt(0.0),
+            data,
+        }
     }
 }
 
@@ -378,7 +454,9 @@ pub enum FrameData {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Group { pub frames: Vec<Frame> }
+pub struct Group {
+    pub frames: Vec<Frame>,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TextFrame {
@@ -391,7 +469,13 @@ pub struct TextFrame {
 
 impl TextFrame {
     pub fn new(content: &str) -> Self {
-        Self { content: content.to_string(), paragraph_style: None, next_frame_id: None, prev_frame_id: None, align_to_baseline_grid: false }
+        Self {
+            content: content.to_string(),
+            paragraph_style: None,
+            next_frame_id: None,
+            prev_frame_id: None,
+            align_to_baseline_grid: false,
+        }
     }
 }
 
@@ -407,19 +491,42 @@ pub struct ImageFrame {
 
 impl ImageFrame {
     pub fn new(asset_path: &str) -> Self {
-        Self { asset_path: asset_path.to_string(), content_x: Pt(0.0), content_y: Pt(0.0), content_scale_x: 1.0, content_scale_y: 1.0, fitting: ImageFitting::Fit }
+        Self {
+            asset_path: asset_path.to_string(),
+            content_x: Pt(0.0),
+            content_y: Pt(0.0),
+            content_scale_x: 1.0,
+            content_scale_y: 1.0,
+            fitting: ImageFitting::Fit,
+        }
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-pub enum ImageFitting { Fill, Fit, Stretch, Original, Custom }
+pub enum ImageFitting {
+    Fill,
+    Fit,
+    Stretch,
+    Original,
+    Custom,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ShapeFrame { pub shape_type: ShapeType }
-impl ShapeFrame { pub fn new(shape_type: ShapeType) -> Self { Self { shape_type } } }
+pub struct ShapeFrame {
+    pub shape_type: ShapeType,
+}
+impl ShapeFrame {
+    pub fn new(shape_type: ShapeType) -> Self {
+        Self { shape_type }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum ShapeType { Rectangle, Ellipse, Path(String) }
+pub enum ShapeType {
+    Rectangle,
+    Ellipse,
+    Path(String),
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ColorSwatch {
@@ -429,130 +536,304 @@ pub struct ColorSwatch {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Color {
-    Rgb { r: f64, g: f64, b: f64 },
-    Cmyk { c: f64, m: f64, y: f64, k: f64 },
-    Spot { name: String, alternate_cmyk: (f64, f64, f64, f64), tint: f64 },
+    Rgb {
+        r: f64,
+        g: f64,
+        b: f64,
+    },
+    Cmyk {
+        c: f64,
+        m: f64,
+        y: f64,
+        k: f64,
+    },
+    Spot {
+        name: String,
+        alternate_cmyk: (f64, f64, f64, f64),
+        tint: f64,
+    },
 }
 
 impl Color {
-    pub fn black() -> Self { Color::Cmyk { c: 0.0, m: 0.0, y: 0.0, k: 1.0 } }
-    pub fn white() -> Self { Color::Cmyk { c: 0.0, m: 0.0, y: 0.0, k: 0.0 } }
-    pub fn rgb(r: f64, g: f64, b: f64) -> Self { Color::Rgb { r, g, b } }
+    pub fn black() -> Self {
+        Color::Cmyk {
+            c: 0.0,
+            m: 0.0,
+            y: 0.0,
+            k: 1.0,
+        }
+    }
+    pub fn white() -> Self {
+        Color::Cmyk {
+            c: 0.0,
+            m: 0.0,
+            y: 0.0,
+            k: 0.0,
+        }
+    }
+    pub fn rgb(r: f64, g: f64, b: f64) -> Self {
+        Color::Rgb { r, g, b }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum KerningMode { Metric, Optical, None }
+pub enum KerningMode {
+    Metric,
+    Optical,
+    None,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum AlignMode { Left, Center, Right, Top, Middle, Bottom }
+pub enum AlignMode {
+    Left,
+    Center,
+    Right,
+    Top,
+    Middle,
+    Bottom,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum DistributeMode { HorizontalSpacing, VerticalSpacing }
+pub enum DistributeMode {
+    HorizontalSpacing,
+    VerticalSpacing,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum TextAlignment { Left, Center, Right, Justify }
+pub enum TextAlignment {
+    Left,
+    Center,
+    Right,
+    Justify,
+}
 
 pub fn align_frames(frames: &[Frame], mode: AlignMode) -> Vec<(String, Pt, Pt)> {
-    if frames.is_empty() { return vec![]; }
+    if frames.is_empty() {
+        return vec![];
+    }
     let mut changes = vec![];
     match mode {
-        AlignMode::Left => { 
-            let min_x = frames.iter().map(|f| f.x.0).fold(f64::INFINITY, f64::min); 
-            for f in frames { changes.push((f.id.clone(), Pt(min_x), f.y)); }
+        AlignMode::Left => {
+            let min_x = frames.iter().map(|f| f.x.0).fold(f64::INFINITY, f64::min);
+            for f in frames {
+                changes.push((f.id.clone(), Pt(min_x), f.y));
+            }
         }
-        AlignMode::Right => { 
-            let max_right = frames.iter().map(|f| f.x.0 + f.width.0).fold(f64::NEG_INFINITY, f64::max); 
-            for f in frames { changes.push((f.id.clone(), Pt(max_right - f.width.0), f.y)); }
+        AlignMode::Right => {
+            let max_right = frames
+                .iter()
+                .map(|f| f.x.0 + f.width.0)
+                .fold(f64::NEG_INFINITY, f64::max);
+            for f in frames {
+                changes.push((f.id.clone(), Pt(max_right - f.width.0), f.y));
+            }
         }
-        AlignMode::Center => { 
-            let min_x = frames.iter().map(|f| f.x.0).fold(f64::INFINITY, f64::min); 
-            let max_x = frames.iter().map(|f| f.x.0 + f.width.0).fold(f64::NEG_INFINITY, f64::max); 
-            let center_x = (min_x + max_x) / 2.0; 
-            for f in frames { changes.push((f.id.clone(), Pt(center_x - f.width.0 / 2.0), f.y)); }
+        AlignMode::Center => {
+            let min_x = frames.iter().map(|f| f.x.0).fold(f64::INFINITY, f64::min);
+            let max_x = frames
+                .iter()
+                .map(|f| f.x.0 + f.width.0)
+                .fold(f64::NEG_INFINITY, f64::max);
+            let center_x = (min_x + max_x) / 2.0;
+            for f in frames {
+                changes.push((f.id.clone(), Pt(center_x - f.width.0 / 2.0), f.y));
+            }
         }
-        AlignMode::Top => { 
-            let min_y = frames.iter().map(|f| f.y.0).fold(f64::INFINITY, f64::min); 
-            for f in frames { changes.push((f.id.clone(), f.x, Pt(min_y))); }
+        AlignMode::Top => {
+            let min_y = frames.iter().map(|f| f.y.0).fold(f64::INFINITY, f64::min);
+            for f in frames {
+                changes.push((f.id.clone(), f.x, Pt(min_y)));
+            }
         }
-        AlignMode::Bottom => { 
-            let max_bottom = frames.iter().map(|f| f.y.0 + f.height.0).fold(f64::NEG_INFINITY, f64::max); 
-            for f in frames { changes.push((f.id.clone(), f.x, Pt(max_bottom - f.height.0))); }
+        AlignMode::Bottom => {
+            let max_bottom = frames
+                .iter()
+                .map(|f| f.y.0 + f.height.0)
+                .fold(f64::NEG_INFINITY, f64::max);
+            for f in frames {
+                changes.push((f.id.clone(), f.x, Pt(max_bottom - f.height.0)));
+            }
         }
-        AlignMode::Middle => { 
-            let min_y = frames.iter().map(|f| f.y.0).fold(f64::INFINITY, f64::min); 
-            let max_y = frames.iter().map(|f| f.y.0 + f.height.0).fold(f64::NEG_INFINITY, f64::max); 
-            let middle_y = (min_y + max_y) / 2.0; 
-            for f in frames { changes.push((f.id.clone(), f.x, Pt(middle_y - f.height.0 / 2.0))); }
+        AlignMode::Middle => {
+            let min_y = frames.iter().map(|f| f.y.0).fold(f64::INFINITY, f64::min);
+            let max_y = frames
+                .iter()
+                .map(|f| f.y.0 + f.height.0)
+                .fold(f64::NEG_INFINITY, f64::max);
+            let middle_y = (min_y + max_y) / 2.0;
+            for f in frames {
+                changes.push((f.id.clone(), f.x, Pt(middle_y - f.height.0 / 2.0)));
+            }
         }
     }
     changes
 }
 
 pub fn distribute_frames(frames: &[Frame], mode: DistributeMode) -> Vec<(String, Pt, Pt)> {
-    if frames.len() < 3 { return vec![]; }
+    if frames.len() < 3 {
+        return vec![];
+    }
     let mut sorted_frames = frames.to_vec();
     let mut changes = vec![];
     match mode {
-        DistributeMode::HorizontalSpacing => { 
-            sorted_frames.sort_by(|a, b| a.x.0.partial_cmp(&b.x.0).unwrap()); 
-            let min_x = sorted_frames[0].x.0; 
-            let last_idx = sorted_frames.len() - 1; 
-            let max_x = sorted_frames[last_idx].x.0; 
-            let total_width: f64 = sorted_frames.iter().map(|f| f.width.0).sum(); 
-            let available_gap = (max_x + sorted_frames[last_idx].width.0) - min_x - total_width; 
-            let gap = available_gap / (sorted_frames.len() - 1) as f64; 
-            let mut current_x = min_x; 
-            for f in sorted_frames { changes.push((f.id.clone(), Pt(current_x), f.y)); current_x += f.width.0 + gap; }
+        DistributeMode::HorizontalSpacing => {
+            sorted_frames.sort_by(|a, b| a.x.0.partial_cmp(&b.x.0).unwrap());
+            let min_x = sorted_frames[0].x.0;
+            let last_idx = sorted_frames.len() - 1;
+            let max_x = sorted_frames[last_idx].x.0;
+            let total_width: f64 = sorted_frames.iter().map(|f| f.width.0).sum();
+            let available_gap = (max_x + sorted_frames[last_idx].width.0) - min_x - total_width;
+            let gap = available_gap / (sorted_frames.len() - 1) as f64;
+            let mut current_x = min_x;
+            for f in sorted_frames {
+                changes.push((f.id.clone(), Pt(current_x), f.y));
+                current_x += f.width.0 + gap;
+            }
         }
-        DistributeMode::VerticalSpacing => { 
-            sorted_frames.sort_by(|a, b| a.y.0.partial_cmp(&b.y.0).unwrap()); 
-            let min_y = sorted_frames[0].y.0; 
-            let last_idx = sorted_frames.len() - 1; 
-            let max_y = sorted_frames[last_idx].y.0; 
-            let total_height: f64 = sorted_frames.iter().map(|f| f.width.0).sum(); 
-            let available_gap = (max_y + sorted_frames[last_idx].height.0) - min_y - total_height; 
-            let gap = available_gap / (sorted_frames.len() - 1) as f64; 
-            let mut current_y = min_y; 
-            for f in sorted_frames { changes.push((f.id.clone(), f.x, Pt(current_y))); current_y += f.height.0 + gap; }
+        DistributeMode::VerticalSpacing => {
+            sorted_frames.sort_by(|a, b| a.y.0.partial_cmp(&b.y.0).unwrap());
+            let min_y = sorted_frames[0].y.0;
+            let last_idx = sorted_frames.len() - 1;
+            let max_y = sorted_frames[last_idx].y.0;
+            let total_height: f64 = sorted_frames.iter().map(|f| f.width.0).sum();
+            let available_gap = (max_y + sorted_frames[last_idx].height.0) - min_y - total_height;
+            let gap = available_gap / (sorted_frames.len() - 1) as f64;
+            let mut current_y = min_y;
+            for f in sorted_frames {
+                changes.push((f.id.clone(), f.x, Pt(current_y)));
+                current_y += f.height.0 + gap;
+            }
         }
     }
     changes
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SnapResult { pub x: Option<SnapPoint>, pub y: Option<SnapPoint> }
+pub struct SnapResult {
+    pub x: Option<SnapPoint>,
+    pub y: Option<SnapPoint>,
+}
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SnapPoint { pub position: Pt, pub target: SnapTarget }
-pub struct SnapEngine { pub threshold: f64 }
+pub struct SnapPoint {
+    pub position: Pt,
+    pub target: SnapTarget,
+}
+pub struct SnapEngine {
+    pub threshold: f64,
+}
 impl SnapEngine {
-    pub fn new(threshold: f64) -> Self { Self { threshold } }
-    pub fn find_snap(&self, x: f64, y: f64, width: f64, height: f64, targets: &[SnapTarget]) -> SnapResult {
-        let mut best_x = None; let mut best_y = None; let mut min_dx = self.threshold; let mut min_dy = self.threshold;
-        let edges_x = [x, x + width / 2.0, x + width]; let edges_y = [y, y + height / 2.0, y + height];
+    pub fn new(threshold: f64) -> Self {
+        Self { threshold }
+    }
+    pub fn find_snap(
+        &self,
+        x: f64,
+        y: f64,
+        width: f64,
+        height: f64,
+        targets: &[SnapTarget],
+    ) -> SnapResult {
+        let mut best_x = None;
+        let mut best_y = None;
+        let mut min_dx = self.threshold;
+        let mut min_dy = self.threshold;
+        let edges_x = [x, x + width / 2.0, x + width];
+        let edges_y = [y, y + height / 2.0, y + height];
         for target in targets {
             match target {
                 SnapTarget::Margin { position, side } => {
                     if *side == Side::Left || *side == Side::Right {
-                        for &ex in &edges_x { let dx = (ex - position.0).abs(); if dx < min_dx { min_dx = dx; best_x = Some(SnapPoint { position: Pt(position.0 - (ex - x)), target: target.clone() }); } }
+                        for &ex in &edges_x {
+                            let dx = (ex - position.0).abs();
+                            if dx < min_dx {
+                                min_dx = dx;
+                                best_x = Some(SnapPoint {
+                                    position: Pt(position.0 - (ex - x)),
+                                    target: target.clone(),
+                                });
+                            }
+                        }
                     } else {
-                        for &ey in &edges_y { let dy = (ey - position.0).abs(); if dy < min_dy { min_dy = dy; best_y = Some(SnapPoint { position: Pt(position.0 - (ey - y)), target: target.clone() }); } }
+                        for &ey in &edges_y {
+                            let dy = (ey - position.0).abs();
+                            if dy < min_dy {
+                                min_dy = dy;
+                                best_y = Some(SnapPoint {
+                                    position: Pt(position.0 - (ey - y)),
+                                    target: target.clone(),
+                                });
+                            }
+                        }
                     }
                 }
-                SnapTarget::Column { position, .. } | SnapTarget::Guide { position, orientation: Orientation::Vertical, .. } | SnapTarget::Object { position, orientation: Orientation::Vertical, .. } => {
-                    for &ex in &edges_x { let dx = (ex - position.0).abs(); if dx < min_dx { min_dx = dx; best_x = Some(SnapPoint { position: Pt(position.0 - (ex - x)), target: target.clone() }); } }
+                SnapTarget::Column { position, .. }
+                | SnapTarget::Guide {
+                    position,
+                    orientation: Orientation::Vertical,
+                    ..
                 }
-                SnapTarget::Guide { position, orientation: Orientation::Horizontal, .. } | SnapTarget::Object { position, orientation: Orientation::Horizontal, .. } | SnapTarget::Baseline { position } => {
-                    for &ey in &edges_y { let dy = (ey - position.0).abs(); if dy < min_dy { min_dy = dy; best_y = Some(SnapPoint { position: Pt(position.0 - (ey - y)), target: target.clone() }); } }
+                | SnapTarget::Object {
+                    position,
+                    orientation: Orientation::Vertical,
+                    ..
+                } => {
+                    for &ex in &edges_x {
+                        let dx = (ex - position.0).abs();
+                        if dx < min_dx {
+                            min_dx = dx;
+                            best_x = Some(SnapPoint {
+                                position: Pt(position.0 - (ex - x)),
+                                target: target.clone(),
+                            });
+                        }
+                    }
+                }
+                SnapTarget::Guide {
+                    position,
+                    orientation: Orientation::Horizontal,
+                    ..
+                }
+                | SnapTarget::Object {
+                    position,
+                    orientation: Orientation::Horizontal,
+                    ..
+                }
+                | SnapTarget::Baseline { position } => {
+                    for &ey in &edges_y {
+                        let dy = (ey - position.0).abs();
+                        if dy < min_dy {
+                            min_dy = dy;
+                            best_y = Some(SnapPoint {
+                                position: Pt(position.0 - (ey - y)),
+                                target: target.clone(),
+                            });
+                        }
+                    }
                 }
             }
         }
-        SnapResult { x: best_x, y: best_y }
+        SnapResult {
+            x: best_x,
+            y: best_y,
+        }
     }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Indents { pub left: Pt, pub right: Pt, pub first_line: Pt }
-impl Default for Indents { fn default() -> Self { Self { left: Pt(0.0), right: Pt(0.0), first_line: Pt(0.0) } } }
+pub struct Indents {
+    pub left: Pt,
+    pub right: Pt,
+    pub first_line: Pt,
+}
+impl Default for Indents {
+    fn default() -> Self {
+        Self {
+            left: Pt(0.0),
+            right: Pt(0.0),
+            first_line: Pt(0.0),
+        }
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ParagraphStyle {
@@ -576,13 +857,45 @@ pub struct ParagraphStyle {
 
 impl Default for ParagraphStyle {
     fn default() -> Self {
-        Self { name: "Basic Paragraph".to_string(), based_on: None, next_style: None, font_family: Some("Inter".to_string()), font_style: Some("Regular".to_string()), font_size: Some(Pt(12.0)), leading: Some(Pt(14.4)), tracking: Some(0.0), alignment: Some(TextAlignment::Left), indents: Some(Indents::default()), space_before: Some(Pt(0.0)), space_after: Some(Pt(0.0)), color_swatch: None, variation_settings: Vec::new(), kerning_mode: Some(KerningMode::Metric) }
+        Self {
+            name: "Basic Paragraph".to_string(),
+            based_on: None,
+            next_style: None,
+            font_family: Some("Inter".to_string()),
+            font_style: Some("Regular".to_string()),
+            font_size: Some(Pt(12.0)),
+            leading: Some(Pt(14.4)),
+            tracking: Some(0.0),
+            alignment: Some(TextAlignment::Left),
+            indents: Some(Indents::default()),
+            space_before: Some(Pt(0.0)),
+            space_after: Some(Pt(0.0)),
+            color_swatch: None,
+            variation_settings: Vec::new(),
+            kerning_mode: Some(KerningMode::Metric),
+        }
     }
 }
 
 impl ParagraphStyle {
     pub fn new(name: &str) -> Self {
-        Self { name: name.to_string(), based_on: None, next_style: None, font_family: None, font_style: None, font_size: None, leading: None, tracking: None, alignment: None, indents: None, space_before: None, space_after: None, color_swatch: None, variation_settings: Vec::new(), kerning_mode: None }
+        Self {
+            name: name.to_string(),
+            based_on: None,
+            next_style: None,
+            font_family: None,
+            font_style: None,
+            font_size: None,
+            leading: None,
+            tracking: None,
+            alignment: None,
+            indents: None,
+            space_before: None,
+            space_after: None,
+            color_swatch: None,
+            variation_settings: Vec::new(),
+            kerning_mode: None,
+        }
     }
 }
 
@@ -603,15 +916,36 @@ pub struct CharacterStyle {
 
 impl CharacterStyle {
     pub fn new(name: &str) -> Self {
-        Self { name: name.to_string(), based_on: None, font_family: None, font_style: None, font_size: None, leading: None, tracking: None, color_swatch: None, variation_settings: Vec::new(), kerning_mode: None }
+        Self {
+            name: name.to_string(),
+            based_on: None,
+            font_family: None,
+            font_style: None,
+            font_size: None,
+            leading: None,
+            tracking: None,
+            color_swatch: None,
+            variation_settings: Vec::new(),
+            kerning_mode: None,
+        }
     }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ObjectStyle { pub name: String, pub fill_color: Option<String>, pub stroke_color: Option<String>, pub stroke_width: Option<Pt> }
+pub struct ObjectStyle {
+    pub name: String,
+    pub fill_color: Option<String>,
+    pub stroke_color: Option<String>,
+    pub stroke_width: Option<Pt>,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Styles { pub paragraph_styles: Vec<ParagraphStyle>, pub character_styles: Vec<CharacterStyle>, #[serde(default)] pub object_styles: Vec<ObjectStyle> }
+pub struct Styles {
+    pub paragraph_styles: Vec<ParagraphStyle>,
+    pub character_styles: Vec<CharacterStyle>,
+    #[serde(default)]
+    pub object_styles: Vec<ObjectStyle>,
+}
 
 impl Styles {
     pub fn resolve_paragraph_style(&self, name: &str) -> Option<ParagraphStyle> {
@@ -621,23 +955,51 @@ impl Styles {
         let mut visited = std::collections::HashSet::new();
         visited.insert(name.to_string());
         while let Some(base_name) = current_based_on {
-            if visited.contains(base_name) { break; }
+            if visited.contains(base_name) {
+                break;
+            }
             visited.insert(base_name.clone());
             if let Some(base_style) = self.paragraph_styles.iter().find(|s| &s.name == base_name) {
-                if resolved.font_family.is_none() { resolved.font_family = base_style.font_family.clone(); }
-                if resolved.font_style.is_none() { resolved.font_style = base_style.font_style.clone(); }
-                if resolved.font_size.is_none() { resolved.font_size = base_style.font_size; }
-                if resolved.leading.is_none() { resolved.leading = base_style.leading; }
-                if resolved.tracking.is_none() { resolved.tracking = base_style.tracking; }
-                if resolved.alignment.is_none() { resolved.alignment = base_style.alignment; }
-                if resolved.indents.is_none() { resolved.indents = base_style.indents.clone(); }
-                if resolved.space_before.is_none() { resolved.space_before = base_style.space_before; }
-                if resolved.space_after.is_none() { resolved.space_after = base_style.space_after; }
-                if resolved.color_swatch.is_none() { resolved.color_swatch = base_style.color_swatch.clone(); }
-                if resolved.variation_settings.is_empty() { resolved.variation_settings = base_style.variation_settings.clone(); }
-                if resolved.kerning_mode.is_none() { resolved.kerning_mode = base_style.kerning_mode; }
+                if resolved.font_family.is_none() {
+                    resolved.font_family = base_style.font_family.clone();
+                }
+                if resolved.font_style.is_none() {
+                    resolved.font_style = base_style.font_style.clone();
+                }
+                if resolved.font_size.is_none() {
+                    resolved.font_size = base_style.font_size;
+                }
+                if resolved.leading.is_none() {
+                    resolved.leading = base_style.leading;
+                }
+                if resolved.tracking.is_none() {
+                    resolved.tracking = base_style.tracking;
+                }
+                if resolved.alignment.is_none() {
+                    resolved.alignment = base_style.alignment;
+                }
+                if resolved.indents.is_none() {
+                    resolved.indents = base_style.indents.clone();
+                }
+                if resolved.space_before.is_none() {
+                    resolved.space_before = base_style.space_before;
+                }
+                if resolved.space_after.is_none() {
+                    resolved.space_after = base_style.space_after;
+                }
+                if resolved.color_swatch.is_none() {
+                    resolved.color_swatch = base_style.color_swatch.clone();
+                }
+                if resolved.variation_settings.is_empty() {
+                    resolved.variation_settings = base_style.variation_settings.clone();
+                }
+                if resolved.kerning_mode.is_none() {
+                    resolved.kerning_mode = base_style.kerning_mode;
+                }
                 current_based_on = base_style.based_on.as_ref();
-            } else { break; }
+            } else {
+                break;
+            }
         }
         Some(resolved)
     }
@@ -649,19 +1011,39 @@ impl Styles {
         let mut visited = std::collections::HashSet::new();
         visited.insert(name.to_string());
         while let Some(base_name) = current_based_on {
-            if visited.contains(base_name) { break; }
+            if visited.contains(base_name) {
+                break;
+            }
             visited.insert(base_name.clone());
             if let Some(base_style) = self.character_styles.iter().find(|s| &s.name == base_name) {
-                if resolved.font_family.is_none() { resolved.font_family = base_style.font_family.clone(); }
-                if resolved.font_style.is_none() { resolved.font_style = base_style.font_style.clone(); }
-                if resolved.font_size.is_none() { resolved.font_size = base_style.font_size; }
-                if resolved.leading.is_none() { resolved.leading = base_style.leading; }
-                if resolved.tracking.is_none() { resolved.tracking = base_style.tracking; }
-                if resolved.color_swatch.is_none() { resolved.color_swatch = base_style.color_swatch.clone(); }
-                if resolved.variation_settings.is_empty() { resolved.variation_settings = base_style.variation_settings.clone(); }
-                if resolved.kerning_mode.is_none() { resolved.kerning_mode = base_style.kerning_mode; }
+                if resolved.font_family.is_none() {
+                    resolved.font_family = base_style.font_family.clone();
+                }
+                if resolved.font_style.is_none() {
+                    resolved.font_style = base_style.font_style.clone();
+                }
+                if resolved.font_size.is_none() {
+                    resolved.font_size = base_style.font_size;
+                }
+                if resolved.leading.is_none() {
+                    resolved.leading = base_style.leading;
+                }
+                if resolved.tracking.is_none() {
+                    resolved.tracking = base_style.tracking;
+                }
+                if resolved.color_swatch.is_none() {
+                    resolved.color_swatch = base_style.color_swatch.clone();
+                }
+                if resolved.variation_settings.is_empty() {
+                    resolved.variation_settings = base_style.variation_settings.clone();
+                }
+                if resolved.kerning_mode.is_none() {
+                    resolved.kerning_mode = base_style.kerning_mode;
+                }
                 current_based_on = base_style.based_on.as_ref();
-            } else { break; }
+            } else {
+                break;
+            }
         }
         Some(resolved)
     }
@@ -669,7 +1051,11 @@ impl Styles {
 
 impl Default for Styles {
     fn default() -> Self {
-        Self { paragraph_styles: vec![ParagraphStyle::default()], character_styles: Vec::new(), object_styles: Vec::new() }
+        Self {
+            paragraph_styles: vec![ParagraphStyle::default()],
+            character_styles: Vec::new(),
+            object_styles: Vec::new(),
+        }
     }
 }
 
@@ -680,17 +1066,58 @@ mod tests {
     #[test]
     fn test_document_creation() {
         let doc = Document {
-            metadata: Metadata { name: "Test Doc".to_string(), author: "".to_string(), description: "".to_string(), created_at: 0, modified_at: 0, dpi: 300, default_unit: Unit::Point, default_bleed: Bleed { top: Pt(0.0), bottom: Pt(0.0), inside: Pt(0.0), outside: Pt(0.0) }, color_profile: "sRGB".to_string(), facing_pages: true },
-            fonts: vec![], icc_profiles: vec![], swatches: vec![], styles: Styles { paragraph_styles: vec![], character_styles: vec![], object_styles: vec![] }, spreads: vec![], parent_pages: vec![], layers: vec![Layer::new("l1", "Layer 1")], baseline_grid: BaselineGrid::default(),
+            metadata: Metadata {
+                name: "Test Doc".to_string(),
+                author: "".to_string(),
+                description: "".to_string(),
+                created_at: 0,
+                modified_at: 0,
+                dpi: 300,
+                default_unit: Unit::Point,
+                default_bleed: Bleed {
+                    top: Pt(0.0),
+                    bottom: Pt(0.0),
+                    inside: Pt(0.0),
+                    outside: Pt(0.0),
+                },
+                color_profile: "sRGB".to_string(),
+                facing_pages: true,
+            },
+            fonts: vec![],
+            icc_profiles: vec![],
+            swatches: vec![],
+            styles: Styles {
+                paragraph_styles: vec![],
+                character_styles: vec![],
+                object_styles: vec![],
+            },
+            spreads: vec![],
+            parent_pages: vec![],
+            layers: vec![Layer::new("l1", "Layer 1")],
+            baseline_grid: BaselineGrid::default(),
         };
         assert_eq!(doc.metadata.name, "Test Doc");
     }
 
     #[test]
     fn test_paragraph_style_cascade() {
-        let base = ParagraphStyle { name: "Base".to_string(), font_family: Some("Arial".to_string()), font_size: Some(Pt(12.0)), ..Default::default() };
-        let derived = ParagraphStyle { name: "Derived".to_string(), based_on: Some("Base".to_string()), font_size: Some(Pt(14.0)), ..ParagraphStyle::new("Derived") };
-        let styles = Styles { paragraph_styles: vec![base, derived], character_styles: vec![], object_styles: vec![] };
+        let base = ParagraphStyle {
+            name: "Base".to_string(),
+            font_family: Some("Arial".to_string()),
+            font_size: Some(Pt(12.0)),
+            ..Default::default()
+        };
+        let derived = ParagraphStyle {
+            name: "Derived".to_string(),
+            based_on: Some("Base".to_string()),
+            font_size: Some(Pt(14.0)),
+            ..ParagraphStyle::new("Derived")
+        };
+        let styles = Styles {
+            paragraph_styles: vec![base, derived],
+            character_styles: vec![],
+            object_styles: vec![],
+        };
         let resolved = styles.resolve_paragraph_style("Derived").unwrap();
         assert_eq!(resolved.font_family, Some("Arial".to_string()));
         assert_eq!(resolved.font_size, Some(Pt(14.0)));
@@ -698,9 +1125,22 @@ mod tests {
 
     #[test]
     fn test_character_style_cascade() {
-        let base = CharacterStyle { name: "Base".to_string(), font_style: Some("Bold".to_string()), ..CharacterStyle::new("Base") };
-        let derived = CharacterStyle { name: "Derived".to_string(), based_on: Some("Base".to_string()), font_size: Some(Pt(18.0)), ..CharacterStyle::new("Derived") };
-        let styles = Styles { paragraph_styles: vec![], character_styles: vec![base, derived], object_styles: vec![] };
+        let base = CharacterStyle {
+            name: "Base".to_string(),
+            font_style: Some("Bold".to_string()),
+            ..CharacterStyle::new("Base")
+        };
+        let derived = CharacterStyle {
+            name: "Derived".to_string(),
+            based_on: Some("Base".to_string()),
+            font_size: Some(Pt(18.0)),
+            ..CharacterStyle::new("Derived")
+        };
+        let styles = Styles {
+            paragraph_styles: vec![],
+            character_styles: vec![base, derived],
+            object_styles: vec![],
+        };
         let resolved = styles.resolve_character_style("Derived").unwrap();
         assert_eq!(resolved.font_style, Some("Bold".to_string()));
         assert_eq!(resolved.font_size, Some(Pt(18.0)));

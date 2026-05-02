@@ -1,6 +1,9 @@
+use publisher_core::{
+    AlignMode, Color as CoreColor, DistributeMode, Frame, GridPreset, Page, Pt, SnapEngine,
+    SnapResult, SnapTarget,
+};
 use serde::{Deserialize, Serialize};
 use tauri::State;
-use publisher_core::{Color as CoreColor, Page, GridPreset, Frame, SnapTarget, SnapEngine, SnapResult, AlignMode, DistributeMode, Pt};
 
 /// Command: Find snapping points for an object
 #[tauri::command]
@@ -24,7 +27,10 @@ pub fn align_frames(frames: Vec<Frame>, mode: AlignMode) -> Result<Vec<(String, 
 
 /// Command: Distribute multiple frames
 #[tauri::command]
-pub fn distribute_frames(frames: Vec<Frame>, mode: DistributeMode) -> Result<Vec<(String, Pt, Pt)>, String> {
+pub fn distribute_frames(
+    frames: Vec<Frame>,
+    mode: DistributeMode,
+) -> Result<Vec<(String, Pt, Pt)>, String> {
     Ok(publisher_core::distribute_frames(&frames, mode))
 }
 
@@ -222,7 +228,7 @@ pub fn convert_color(
     state: State<'_, crate::AppState>,
     color: CoreColor,
 ) -> Result<CoreColor, String> {
-    let mut color_engine = state
+    let color_engine = state
         .color_engine
         .lock()
         .map_err(|e| format!("Failed to acquire lock: {}", e))?;

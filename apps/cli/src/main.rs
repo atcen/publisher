@@ -1,6 +1,6 @@
 use publisher_core::builder::DocumentBuilder;
 use publisher_core::paper::PaperFormat;
-use publisher_core::{Frame, FrameData, Pt, TextFrame, ImageFrame, ImageFitting};
+use publisher_core::{Frame, FrameData, Pt, TextFrame};
 
 fn main() {
     println!("--- Publisher Prototype ---");

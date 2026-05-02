@@ -86,7 +86,7 @@ pub fn deserialize_document(data: &[u8]) -> Result<Document, PersistenceError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Bleed, Margins, Metadata, Pt, Spread, Unit, Styles};
+    use crate::{Bleed, Margins, Metadata, Pt, Spread, Styles, Unit};
 
     fn create_test_document() -> Document {
         Document {
@@ -192,7 +192,7 @@ mod tests {
     #[test]
     fn test_unsupported_future_version() {
         // Use a minimally valid document so we test version compatibility, not parse errors
-        let future_version = r#"{
+        let future_version = r##"{
             "version": 99,
             "document": {
                 "metadata": {
@@ -216,9 +216,16 @@ mod tests {
                     "object_styles": []
                 },
                 "spreads": [],
-                "layers": []
+                "parent_pages": [],
+                "layers": [],
+                "baseline_grid": {
+                    "line_height": 12.0,
+                    "offset": 0.0,
+                    "visible": false,
+                    "color": "#000000"
+                }
             }
-        }"#;
+        }"##;
         let result = deserialize_document(future_version.as_bytes());
         assert!(result.is_err());
 

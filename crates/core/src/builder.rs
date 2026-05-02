@@ -192,7 +192,7 @@ mod tests {
             .with_columns(3)
             .with_gutter(crate::Pt(10.0))
             .build();
-        
+
         let page = &doc.spreads[0].pages[0];
         assert_eq!(page.column_count, 3);
         assert_eq!(page.gutter_width, crate::Pt(10.0));

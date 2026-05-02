@@ -4,17 +4,20 @@
 mod commands;
 mod document_service;
 
-use commands::{get_history_state, get_redo_history, get_undo_history, redo, undo, convert_color, apply_grid_preset, find_snap, align_frames, distribute_frames};
+use commands::{
+    align_frames, apply_grid_preset, convert_color, distribute_frames, find_snap,
+    get_history_state, get_redo_history, get_undo_history, redo, undo,
+};
 use document_service::{DocumentService, DocumentServiceError};
-use publisher_core::DocumentState;
 use publisher_color::ColorEngine;
+use publisher_core::DocumentState;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
-use tauri::{Runtime, Manager};
+use tauri::{Manager, Runtime};
 use tauri_plugin_dialog::DialogExt;
 
 /// Application preferences stored on disk
@@ -386,12 +389,10 @@ async fn save_recovery_file(
     document_json: String,
 ) -> Result<(), String> {
     let recovery_path = state.recovery_dir.join("autosave.recovery");
-    tauri::async_runtime::spawn_blocking(move || {
-        fs::write(&recovery_path, document_json)
-    })
-    .await
-    .map_err(|e| format!("Failed to spawn blocking task: {}", e))?
-    .map_err(|e| format!("Failed to write recovery file: {}", e))?;
+    tauri::async_runtime::spawn_blocking(move || fs::write(&recovery_path, document_json))
+        .await
+        .map_err(|e| format!("Failed to spawn blocking task: {}", e))?
+        .map_err(|e| format!("Failed to write recovery file: {}", e))?;
     Ok(())
 }
 
@@ -400,7 +401,9 @@ async fn save_recovery_file(
 async fn check_recovery_file(state: tauri::State<'_, AppState>) -> Result<Option<String>, String> {
     let recovery_path = state.recovery_dir.join("autosave.recovery");
     if recovery_path.exists() {
-        fs::read_to_string(&recovery_path).map(Some).map_err(|e| format!("Failed to read recovery file: {}", e))
+        fs::read_to_string(&recovery_path)
+            .map(Some)
+            .map_err(|e| format!("Failed to read recovery file: {}", e))
     } else {
         Ok(None)
     }
@@ -411,7 +414,8 @@ async fn check_recovery_file(state: tauri::State<'_, AppState>) -> Result<Option
 async fn clear_recovery_file(state: tauri::State<'_, AppState>) -> Result<(), String> {
     let recovery_path = state.recovery_dir.join("autosave.recovery");
     if recovery_path.exists() {
-        fs::remove_file(&recovery_path).map_err(|e| format!("Failed to delete recovery file: {}", e))?;
+        fs::remove_file(&recovery_path)
+            .map_err(|e| format!("Failed to delete recovery file: {}", e))?;
     }
     Ok(())
 }
@@ -450,11 +454,14 @@ fn main() {
         .plugin(tauri_plugin_fs::init())
         .setup(|app| {
             // Setup directories
-            let app_data_dir = app.path().app_data_dir().expect("Failed to get app data dir");
+            let app_data_dir = app
+                .path()
+                .app_data_dir()
+                .expect("Failed to get app data dir");
             let recovery_dir = app_data_dir.join("recovery");
             let preferences_path = app_data_dir.join("preferences.json");
             fs::create_dir_all(&recovery_dir).expect("Failed to create recovery directory");
-            
+
             app.manage(AppState {
                 document_service: Mutex::new(DocumentService::new()),
                 document_state: Mutex::new(None),

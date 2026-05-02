@@ -88,7 +88,7 @@ fn test_issue_40_malformed_file_handling() {
 fn test_issue_40_unsupported_file_version() {
     // Unsupported future file versions should be clearly reported
     // Use a minimally valid document so the version check is exercised (not parse error)
-    let future_version_doc = br#"{
+    let future_version_doc = r##"{
         "version": 999,
         "document": {
             "metadata": {
@@ -100,19 +100,30 @@ fn test_issue_40_unsupported_file_version() {
                 "dpi": 300,
                 "default_unit": "Millimeter",
                 "default_bleed": {"top": 0.0, "bottom": 0.0, "inside": 0.0, "outside": 0.0},
-                "color_profile": "sRGB"
+                "color_profile": "sRGB",
+                "facing_pages": true
             },
+            "fonts": [],
+            "icc_profiles": [],
             "swatches": [],
             "styles": {
                 "paragraph_styles": [],
                 "character_styles": [],
                 "object_styles": []
             },
-            "spreads": []
+            "spreads": [],
+            "parent_pages": [],
+            "layers": [],
+            "baseline_grid": {
+                "line_height": 12.0,
+                "offset": 0.0,
+                "visible": false,
+                "color": "#000000"
+            }
         }
-    }"#;
+    }"##;
 
-    let result = deserialize_document(future_version_doc);
+    let result = deserialize_document(future_version_doc.as_bytes());
     assert!(result.is_err());
 
     // Verify we get the FormatError for unsupported version, not a ParseError

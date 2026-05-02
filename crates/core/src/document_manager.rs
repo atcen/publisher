@@ -183,10 +183,16 @@ mod tests {
                     outside: Pt(0.0),
                 },
                 color_profile: "sRGB".to_string(),
+                facing_pages: false,
             },
+            fonts: vec![],
+            icc_profiles: vec![],
             swatches: vec![],
             styles: Default::default(),
             spreads: vec![],
+            parent_pages: vec![],
+            layers: vec![],
+            baseline_grid: crate::BaselineGrid::default(),
         }
     }
 

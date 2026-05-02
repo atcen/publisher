@@ -1,8 +1,9 @@
+use publisher_color::ColorEngine;
 use publisher_core::{
-    Document, Frame, FrameData, Group, ImageFrame, ImageFitting, Page, ShapeFrame, ShapeType, TextFrame, KerningMode,
+    Document, Frame, FrameData, Group, ImageFitting, ImageFrame, KerningMode, Page, ShapeFrame,
+    ShapeType, TextFrame,
 };
 use publisher_typography::{TypographyEngine, Variation};
-use publisher_color::ColorEngine;
 use std::time::{Duration, Instant};
 use vello::kurbo::{Affine, Circle, Point, Rect};
 use vello::peniko::{Color, Fill};
@@ -19,7 +20,7 @@ pub struct VelloRenderer {
 }
 
 impl VelloRenderer {
-    pub fn new(device: Option<&wgpu::Device>) -> Result<Self, vello::Error> {
+    pub fn new(device: Option<&wgpu::Device>) -> Result<Self, Box<dyn std::error::Error>> {
         let renderer = match device {
             Some(dev) => Some(Renderer::new(
                 dev,
@@ -33,7 +34,7 @@ impl VelloRenderer {
             None => None,
         };
 
-        let mut color_engine = ColorEngine::new().map_err(|e| vello::Error::Resource(e.into()))?;
+        let color_engine = ColorEngine::new()?;
 
         Ok(Self {
             renderer,
@@ -47,7 +48,7 @@ impl VelloRenderer {
     }
 
     pub fn render_document(&mut self, document: &Document, spread_index: usize, zoom: f64) -> bool {
-        if let Some(profile_data) = document.icc_profiles.get(0) {
+        if let Some(profile_data) = document.icc_profiles.first() {
             let _ = self.color_engine.set_cmyk_profile(profile_data);
         }
 
@@ -73,7 +74,14 @@ impl VelloRenderer {
         true
     }
 
-    fn render_page(&mut self, document: &Document, page: &Page, page_index_in_spread: usize, zoom: f64, x_offset: f64) {
+    fn render_page(
+        &mut self,
+        document: &Document,
+        page: &Page,
+        page_index_in_spread: usize,
+        zoom: f64,
+        x_offset: f64,
+    ) {
         let page_width = page.width.0 * zoom;
         let page_height = page.height.0 * zoom;
 
@@ -95,7 +103,14 @@ impl VelloRenderer {
         self.render_page_content(document, page, zoom, x_offset);
     }
 
-    fn render_applied_parent(&mut self, document: &Document, parent_id: &str, page_index_in_spread: usize, zoom: f64, x_offset: f64) {
+    fn render_applied_parent(
+        &mut self,
+        document: &Document,
+        parent_id: &str,
+        page_index_in_spread: usize,
+        zoom: f64,
+        x_offset: f64,
+    ) {
         if let Some(parent) = document.parent_pages.iter().find(|p| p.id == parent_id) {
             if let Some(base_id) = &parent.based_on_id {
                 self.render_applied_parent(document, base_id, page_index_in_spread, zoom, x_offset);
@@ -121,7 +136,13 @@ impl VelloRenderer {
         }
     }
 
-    fn render_frame(&mut self, document: &Document, frame: &Frame, zoom: f64, parent_transform: Affine) {
+    fn render_frame(
+        &mut self,
+        document: &Document,
+        frame: &Frame,
+        zoom: f64,
+        parent_transform: Affine,
+    ) {
         let x = frame.x.0 * zoom;
         let y = frame.y.0 * zoom;
         let width = frame.width.0 * zoom;
@@ -137,9 +158,15 @@ impl VelloRenderer {
         let final_transform = parent_transform * local_transform;
 
         match &frame.data {
-            FrameData::Text(text_frame) => {
-                self.render_text_frame(document, text_frame, 0.0, 0.0, width, height, final_transform)
-            }
+            FrameData::Text(text_frame) => self.render_text_frame(
+                document,
+                text_frame,
+                0.0,
+                0.0,
+                width,
+                height,
+                final_transform,
+            ),
             FrameData::Image(image_frame) => {
                 self.render_image_frame(image_frame, 0.0, 0.0, width, height, final_transform)
             }
@@ -150,12 +177,19 @@ impl VelloRenderer {
         }
     }
 
-    fn render_group(&mut self, document: &Document, group: &Group, zoom: f64, parent_transform: Affine) {
+    fn render_group(
+        &mut self,
+        document: &Document,
+        group: &Group,
+        zoom: f64,
+        parent_transform: Affine,
+    ) {
         for frame in &group.frames {
             self.render_frame(document, frame, zoom, parent_transform);
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn render_text_frame(
         &mut self,
         document: &Document,
@@ -177,21 +211,34 @@ impl VelloRenderer {
 
         let style_name = text_frame.paragraph_style.as_deref().unwrap_or("Standard");
         if let Some(style) = document.styles.resolve_paragraph_style(style_name) {
-            if let Some(font) = document.fonts.iter().find(|f| f.family == style.font_family.as_deref().unwrap_or("")) {
-                let variations: Vec<Variation> = style.variation_settings.iter().map(|v| Variation {
-                    tag: v.tag.clone(),
-                    value: v.value,
-                }).collect();
+            if let Some(font) = document
+                .fonts
+                .iter()
+                .find(|f| f.family == style.font_family.as_deref().unwrap_or(""))
+            {
+                let variations: Vec<Variation> = style
+                    .variation_settings
+                    .iter()
+                    .map(|v| Variation {
+                        tag: v.tag.clone(),
+                        value: v.value,
+                    })
+                    .collect();
 
-                if let Ok(shaped) = self.typography.shape_text(
-                    &text_frame.content,
-                    &font.data,
-                    style.font_size.unwrap_or(publisher_core::Pt(12.0)),
-                    style.alignment.unwrap_or(publisher_core::TextAlignment::Left),
-                    &[],
-                    &variations,
-                    style.kerning_mode.unwrap_or(KerningMode::Metric),
-                ) {
+                let options = publisher_typography::ShapeOptions {
+                    font_size: style.font_size.unwrap_or(publisher_core::Pt(12.0)),
+                    alignment: style
+                        .alignment
+                        .unwrap_or(publisher_core::TextAlignment::Left),
+                    features: vec![],
+                    variations,
+                    kerning_mode: style.kerning_mode.unwrap_or(KerningMode::Metric),
+                };
+
+                if let Ok(shaped) =
+                    self.typography
+                        .shape_text(&text_frame.content, &font.data, &options)
+                {
                     let _ = shaped;
                 }
             }
@@ -218,8 +265,8 @@ impl VelloRenderer {
 
         let (content_scale_x, content_scale_y) = match frame.fitting {
             ImageFitting::Stretch => (1.0, 1.0),
-            ImageFitting::Fit => (0.8, 0.8), 
-            ImageFitting::Fill => (1.2, 1.2), 
+            ImageFitting::Fit => (0.8, 0.8),
+            ImageFitting::Fill => (1.2, 1.2),
             _ => (1.0, 1.0),
         };
 
@@ -228,9 +275,19 @@ impl VelloRenderer {
         let content_x = x + (width - content_width) / 2.0;
         let content_y = y + (height - content_height) / 2.0;
 
-        let content_rect = Rect::new(content_x, content_y, content_x + content_width, content_y + content_height);
-        
-        self.scene.push_layer(vello::peniko::BlendMode::default(), 1.0, transform, &image_rect);
+        let content_rect = Rect::new(
+            content_x,
+            content_y,
+            content_x + content_width,
+            content_y + content_height,
+        );
+
+        self.scene.push_layer(
+            vello::peniko::BlendMode::default(),
+            1.0,
+            transform,
+            &image_rect,
+        );
         self.scene.fill(
             Fill::NonZero,
             transform,
@@ -317,14 +374,14 @@ pub fn init() {
     println!("Publisher Renderer Initialized with Typography and Color support");
 }
 
-pub fn create_renderer(device: &wgpu::Device) -> Result<VelloRenderer, vello::Error> {
+pub fn create_renderer(device: &wgpu::Device) -> Result<VelloRenderer, Box<dyn std::error::Error>> {
     VelloRenderer::new(Some(device))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use publisher_core::{Bleed, Layer, Margins, Metadata, Pt, Spread, Styles, Unit, BaselineGrid};
+    use publisher_core::{BaselineGrid, Bleed, Layer, Margins, Metadata, Pt, Spread, Styles, Unit};
 
     #[test]
     fn test_renderer_init() {
@@ -337,16 +394,45 @@ mod tests {
         let page = Page {
             width: Pt(200.0),
             height: Pt(200.0),
-            margins: Margins { top: Pt(0.0), bottom: Pt(0.0), inside: Pt(0.0), outside: Pt(0.0) },
+            margins: Margins {
+                top: Pt(0.0),
+                bottom: Pt(0.0),
+                inside: Pt(0.0),
+                outside: Pt(0.0),
+            },
             bleed: None,
             column_count: 1,
             gutter_width: Pt(12.0),
             guides: vec![],
-            frames: vec![Frame::new("f1", "l1", Pt(10.0), Pt(10.0), Pt(100.0), Pt(50.0), FrameData::Text(TextFrame::new("Hello")))],
+            frames: vec![Frame::new(
+                "f1",
+                "l1",
+                Pt(10.0),
+                Pt(10.0),
+                Pt(100.0),
+                Pt(50.0),
+                FrameData::Text(TextFrame::new("Hello")),
+            )],
             applied_parent_id: None,
         };
         let doc = Document {
-            metadata: Metadata { name: "Test".to_string(), author: "".to_string(), description: "".to_string(), created_at: 0, modified_at: 0, dpi: 72, default_unit: Unit::Point, default_bleed: Bleed { top: Pt(0.0), bottom: Pt(0.0), inside: Pt(0.0), outside: Pt(0.0) }, color_profile: "sRGB".to_string(), facing_pages: false },
+            metadata: Metadata {
+                name: "Test".to_string(),
+                author: "".to_string(),
+                description: "".to_string(),
+                created_at: 0,
+                modified_at: 0,
+                dpi: 72,
+                default_unit: Unit::Point,
+                default_bleed: Bleed {
+                    top: Pt(0.0),
+                    bottom: Pt(0.0),
+                    inside: Pt(0.0),
+                    outside: Pt(0.0),
+                },
+                color_profile: "sRGB".to_string(),
+                facing_pages: false,
+            },
             fonts: vec![],
             icc_profiles: vec![],
             swatches: vec![],

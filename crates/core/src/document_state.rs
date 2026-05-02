@@ -81,7 +81,9 @@ mod tests {
             swatches: vec![],
             styles: Styles::default(),
             spreads: vec![],
+            parent_pages: vec![],
             layers: vec![crate::Layer::new("l1", "Layer 1")],
+            baseline_grid: crate::BaselineGrid::default(),
         }
     }
 
