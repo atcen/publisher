@@ -452,24 +452,71 @@ pub enum DistributeMode { HorizontalSpacing, VerticalSpacing }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TextAlignment { Left, Center, Right, Justify }
 
-pub fn align_frames(frames: &mut [Frame], mode: AlignMode) {
-    if frames.is_empty() { return; }
+pub fn align_frames(frames: &[Frame], mode: AlignMode) -> Vec<(String, Pt, Pt)> {
+    if frames.is_empty() { return vec![]; }
+    let mut changes = vec![];
     match mode {
-        AlignMode::Left => { let min_x = frames.iter().map(|f| f.x.0).fold(f64::INFINITY, f64::min); for f in frames { f.x = Pt(min_x); } }
-        AlignMode::Right => { let max_right = frames.iter().map(|f| f.x.0 + f.width.0).fold(f64::NEG_INFINITY, f64::max); for f in frames { f.x = Pt(max_right - f.width.0); } }
-        AlignMode::Center => { let min_x = frames.iter().map(|f| f.x.0).fold(f64::INFINITY, f64::min); let max_x = frames.iter().map(|f| f.x.0 + f.width.0).fold(f64::NEG_INFINITY, f64::max); let center_x = (min_x + max_x) / 2.0; for f in frames { f.x = Pt(center_x - f.width.0 / 2.0); } }
-        AlignMode::Top => { let min_y = frames.iter().map(|f| f.y.0).fold(f64::INFINITY, f64::min); for f in frames { f.y = Pt(min_y); } }
-        AlignMode::Bottom => { let max_bottom = frames.iter().map(|f| f.y.0 + f.height.0).fold(f64::NEG_INFINITY, f64::max); for f in frames { f.y = Pt(max_bottom - f.height.0); } }
-        AlignMode::Middle => { let min_y = frames.iter().map(|f| f.y.0).fold(f64::INFINITY, f64::min); let max_y = frames.iter().map(|f| f.y.0 + f.height.0).fold(f64::NEG_INFINITY, f64::max); let middle_y = (min_y + max_y) / 2.0; for f in frames { f.y = Pt(middle_y - f.height.0 / 2.0); } }
+        AlignMode::Left => { 
+            let min_x = frames.iter().map(|f| f.x.0).fold(f64::INFINITY, f64::min); 
+            for f in frames { changes.push((f.id.clone(), Pt(min_x), f.y)); }
+        }
+        AlignMode::Right => { 
+            let max_right = frames.iter().map(|f| f.x.0 + f.width.0).fold(f64::NEG_INFINITY, f64::max); 
+            for f in frames { changes.push((f.id.clone(), Pt(max_right - f.width.0), f.y)); }
+        }
+        AlignMode::Center => { 
+            let min_x = frames.iter().map(|f| f.x.0).fold(f64::INFINITY, f64::min); 
+            let max_x = frames.iter().map(|f| f.x.0 + f.width.0).fold(f64::NEG_INFINITY, f64::max); 
+            let center_x = (min_x + max_x) / 2.0; 
+            for f in frames { changes.push((f.id.clone(), Pt(center_x - f.width.0 / 2.0), f.y)); }
+        }
+        AlignMode::Top => { 
+            let min_y = frames.iter().map(|f| f.y.0).fold(f64::INFINITY, f64::min); 
+            for f in frames { changes.push((f.id.clone(), f.x, Pt(min_y))); }
+        }
+        AlignMode::Bottom => { 
+            let max_bottom = frames.iter().map(|f| f.y.0 + f.height.0).fold(f64::NEG_INFINITY, f64::max); 
+            for f in frames { changes.push((f.id.clone(), f.x, Pt(max_bottom - f.height.0))); }
+        }
+        AlignMode::Middle => { 
+            let min_y = frames.iter().map(|f| f.y.0).fold(f64::INFINITY, f64::min); 
+            let max_y = frames.iter().map(|f| f.y.0 + f.height.0).fold(f64::NEG_INFINITY, f64::max); 
+            let middle_y = (min_y + max_y) / 2.0; 
+            for f in frames { changes.push((f.id.clone(), f.x, Pt(middle_y - f.height.0 / 2.0))); }
+        }
     }
+    changes
 }
 
-pub fn distribute_frames(frames: &mut [Frame], mode: DistributeMode) {
-    if frames.len() < 3 { return; }
+pub fn distribute_frames(frames: &[Frame], mode: DistributeMode) -> Vec<(String, Pt, Pt)> {
+    if frames.len() < 3 { return vec![]; }
+    let mut sorted_frames = frames.to_vec();
+    let mut changes = vec![];
     match mode {
-        DistributeMode::HorizontalSpacing => { frames.sort_by(|a, b| a.x.0.partial_cmp(&b.x.0).unwrap()); let min_x = frames[0].x.0; let last_idx = frames.len() - 1; let max_x = frames[last_idx].x.0; let total_width: f64 = frames.iter().map(|f| f.width.0).sum(); let available_gap = (max_x + frames[last_idx].width.0) - min_x - total_width; let gap = available_gap / (frames.len() - 1) as f64; let mut current_x = min_x; for f in frames { f.x = Pt(current_x); current_x += f.width.0 + gap; } }
-        DistributeMode::VerticalSpacing => { frames.sort_by(|a, b| a.y.0.partial_cmp(&b.y.0).unwrap()); let min_y = frames[0].y.0; let last_idx = frames.len() - 1; let max_y = frames[last_idx].y.0; let total_height: f64 = frames.iter().map(|f| f.width.0).sum(); let available_gap = (max_y + frames[last_idx].height.0) - min_y - total_height; let gap = available_gap / (frames.len() - 1) as f64; let mut current_y = min_y; for f in frames { f.y = Pt(current_y); current_y += f.height.0 + gap; } }
+        DistributeMode::HorizontalSpacing => { 
+            sorted_frames.sort_by(|a, b| a.x.0.partial_cmp(&b.x.0).unwrap()); 
+            let min_x = sorted_frames[0].x.0; 
+            let last_idx = sorted_frames.len() - 1; 
+            let max_x = sorted_frames[last_idx].x.0; 
+            let total_width: f64 = sorted_frames.iter().map(|f| f.width.0).sum(); 
+            let available_gap = (max_x + sorted_frames[last_idx].width.0) - min_x - total_width; 
+            let gap = available_gap / (sorted_frames.len() - 1) as f64; 
+            let mut current_x = min_x; 
+            for f in sorted_frames { changes.push((f.id.clone(), Pt(current_x), f.y)); current_x += f.width.0 + gap; }
+        }
+        DistributeMode::VerticalSpacing => { 
+            sorted_frames.sort_by(|a, b| a.y.0.partial_cmp(&b.y.0).unwrap()); 
+            let min_y = sorted_frames[0].y.0; 
+            let last_idx = sorted_frames.len() - 1; 
+            let max_y = sorted_frames[last_idx].y.0; 
+            let total_height: f64 = sorted_frames.iter().map(|f| f.width.0).sum(); 
+            let available_gap = (max_y + sorted_frames[last_idx].height.0) - min_y - total_height; 
+            let gap = available_gap / (sorted_frames.len() - 1) as f64; 
+            let mut current_y = min_y; 
+            for f in sorted_frames { changes.push((f.id.clone(), f.x, Pt(current_y))); current_y += f.height.0 + gap; }
+        }
     }
+    changes
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -484,12 +531,17 @@ impl SnapEngine {
         let edges_x = [x, x + width / 2.0, x + width]; let edges_y = [y, y + height / 2.0, y + height];
         for target in targets {
             match target {
-                SnapTarget::Margin { position, side } | SnapTarget::Column { position, .. } | SnapTarget::Guide { position, orientation: Orientation::Vertical, .. } | SnapTarget::Object { position, orientation: Orientation::Vertical, .. } => {
-                    if matches!(target, SnapTarget::Margin { side, .. } if *side == Side::Top || *side == Side::Bottom) { continue; }
+                SnapTarget::Margin { position, side } => {
+                    if *side == Side::Left || *side == Side::Right {
+                        for &ex in &edges_x { let dx = (ex - position.0).abs(); if dx < min_dx { min_dx = dx; best_x = Some(SnapPoint { position: Pt(position.0 - (ex - x)), target: target.clone() }); } }
+                    } else {
+                        for &ey in &edges_y { let dy = (ey - position.0).abs(); if dy < min_dy { min_dy = dy; best_y = Some(SnapPoint { position: Pt(position.0 - (ey - y)), target: target.clone() }); } }
+                    }
+                }
+                SnapTarget::Column { position, .. } | SnapTarget::Guide { position, orientation: Orientation::Vertical, .. } | SnapTarget::Object { position, orientation: Orientation::Vertical, .. } => {
                     for &ex in &edges_x { let dx = (ex - position.0).abs(); if dx < min_dx { min_dx = dx; best_x = Some(SnapPoint { position: Pt(position.0 - (ex - x)), target: target.clone() }); } }
                 }
-                SnapTarget::Margin { position, side } | SnapTarget::Guide { position, orientation: Orientation::Horizontal, .. } | SnapTarget::Object { position, orientation: Orientation::Horizontal, .. } | SnapTarget::Baseline { position } => {
-                     if matches!(target, SnapTarget::Margin { side, .. } if *side == Side::Left || *side == Side::Right) { continue; }
+                SnapTarget::Guide { position, orientation: Orientation::Horizontal, .. } | SnapTarget::Object { position, orientation: Orientation::Horizontal, .. } | SnapTarget::Baseline { position } => {
                     for &ey in &edges_y { let dy = (ey - position.0).abs(); if dy < min_dy { min_dy = dy; best_y = Some(SnapPoint { position: Pt(position.0 - (ey - y)), target: target.clone() }); } }
                 }
             }

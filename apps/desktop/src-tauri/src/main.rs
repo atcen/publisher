@@ -4,7 +4,7 @@
 mod commands;
 mod document_service;
 
-use commands::{get_history_state, get_redo_history, get_undo_history, redo, undo, convert_color, apply_grid_preset};
+use commands::{get_history_state, get_redo_history, get_undo_history, redo, undo, convert_color, apply_grid_preset, find_snap, align_frames, distribute_frames};
 use document_service::{DocumentService, DocumentServiceError};
 use publisher_core::DocumentState;
 use publisher_color::ColorEngine;
@@ -482,6 +482,9 @@ fn main() {
             convert_color,
             // Layout commands
             apply_grid_preset,
+            find_snap,
+            align_frames,
+            distribute_frames,
             // Recovery commands
             save_recovery_file,
             check_recovery_file,

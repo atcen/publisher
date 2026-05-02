@@ -124,10 +124,19 @@ mod tests {
                     bleed: None,
                     column_count: 2,
                     gutter_width: Pt(12.0),
+                    guides: vec![],
                     frames: vec![],
+                    applied_parent_id: None,
                 }],
             }],
+            parent_pages: vec![],
             layers: vec![crate::Layer::new("l1", "Layer 1")],
+            baseline_grid: crate::BaselineGrid {
+                line_height: Pt(12.0),
+                offset: Pt(0.0),
+                visible: false,
+                color: "#000000".to_string(),
+            },
         }
     }
 

@@ -1,6 +1,32 @@
 use serde::{Deserialize, Serialize};
 use tauri::State;
-use publisher_core::{Color as CoreColor, Page, GridPreset};
+use publisher_core::{Color as CoreColor, Page, GridPreset, Frame, SnapTarget, SnapEngine, SnapResult, AlignMode, DistributeMode, Pt};
+
+/// Command: Find snapping points for an object
+#[tauri::command]
+pub fn find_snap(
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+    targets: Vec<SnapTarget>,
+    threshold: f64,
+) -> Result<SnapResult, String> {
+    let engine = SnapEngine::new(threshold);
+    Ok(engine.find_snap(x, y, width, height, &targets))
+}
+
+/// Command: Align multiple frames
+#[tauri::command]
+pub fn align_frames(frames: Vec<Frame>, mode: AlignMode) -> Result<Vec<(String, Pt, Pt)>, String> {
+    Ok(publisher_core::align_frames(&frames, mode))
+}
+
+/// Command: Distribute multiple frames
+#[tauri::command]
+pub fn distribute_frames(frames: Vec<Frame>, mode: DistributeMode) -> Result<Vec<(String, Pt, Pt)>, String> {
+    Ok(publisher_core::distribute_frames(&frames, mode))
+}
 
 /// Check undo/redo availability and counts
 #[derive(Debug, Serialize, Deserialize)]
