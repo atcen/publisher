@@ -178,11 +178,71 @@ jobs:
           args: "--target ${{ matrix.target }}"
           projectPath: "apps/desktop"
 
+      - name: Validate macOS DMG
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          dmg_dir="target/${{ matrix.target }}/release/bundle/dmg"
+          validated_dir="target/${{ matrix.target }}/release/bundle/validated/dmg"
+          mount_point="$(mktemp -d "${RUNNER_TEMP}/publisher-dmg.XXXXXX")"
+
+          cleanup() {
+            hdiutil detach "$mount_point" -quiet 2>/dev/null || true
+            rmdir "$mount_point" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+
+          mapfile -t dmg_files < <(find "$dmg_dir" -maxdepth 1 -type f -name "*.dmg" | sort)
+          if [ "${#dmg_files[@]}" -ne 1 ]; then
+            echo "ERROR: expected exactly one DMG in $dmg_dir, found ${#dmg_files[@]}"
+            printf '  %s\n' "${dmg_files[@]}"
+            exit 1
+          fi
+
+          dmg="${dmg_files[0]}"
+          hdiutil verify "$dmg"
+          hdiutil attach -readonly -nobrowse -mountpoint "$mount_point" "$dmg"
+
+          app_path="$mount_point/Publisher.app"
+          executable_path="$app_path/Contents/MacOS/Publisher"
+          if [ ! -d "$app_path" ]; then
+            echo "ERROR: mounted DMG does not contain Publisher.app"
+            find "$mount_point" -maxdepth 3 -print
+            exit 1
+          fi
+          if [ ! -x "$executable_path" ]; then
+            echo "ERROR: Publisher.app is missing a launchable executable at $executable_path"
+            find "$app_path/Contents/MacOS" -maxdepth 1 -print 2>/dev/null || true
+            exit 1
+          fi
+
+          spctl_output="$(spctl --assess --type execute --verbose=4 "$app_path" 2>&1)" || spctl_status=$?
+          spctl_status="${spctl_status:-0}"
+          echo "$spctl_output"
+          if [ "$spctl_status" -ne 0 ] && echo "$spctl_output" | grep -Eiq 'corrupt|corrupted|damaged|malformed'; then
+            echo "ERROR: Gatekeeper reported the app as corrupted or damaged"
+            exit 1
+          fi
+
+          open -n "$app_path"
+          sleep 5
+          osascript -e 'quit app "Publisher"' || true
+
+          mkdir -p "$validated_dir"
+          cp "$dmg" "$validated_dir/"
+
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: artifacts-${{ matrix.target }}
-          path: target/${{ matrix.target }}/release/bundle
+          path: |
+            target/${{ matrix.target }}/release/bundle/deb
+            target/${{ matrix.target }}/release/bundle/rpm
+            target/${{ matrix.target }}/release/bundle/appimage
+            target/${{ matrix.target }}/release/bundle/nsis
+            target/${{ matrix.target }}/release/bundle/validated/dmg
           if-no-files-found: warn
           retention-days: 1
 
@@ -241,7 +301,7 @@ jobs:
           echo ""
 
           echo "=== Finding installer files ==="
-          mapfile -t installer_files < <(find release-files -type f \( -name "*.dmg" -o -name "*.exe" -o -name "*.deb" -o -name "*.rpm" -o -name "*.AppImage" \))
+          mapfile -t installer_files < <(find release-files -type f \( -path "*/validated/dmg/*.dmg" -o -name "*.exe" -o -name "*.deb" -o -name "*.rpm" -o -name "*.AppImage" \))
           echo "Found ${#installer_files[@]} files:"
           printf '  %s\n' "${installer_files[@]}"
           echo ""
