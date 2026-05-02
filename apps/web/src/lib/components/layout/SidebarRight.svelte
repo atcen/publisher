@@ -30,7 +30,8 @@
       return `rgb(${255*(1-c)*(1-k)},${255*(1-m)*(1-k)},${255*(1-y)*(1-k)})`;
     }
     if ('Spot' in s.color) {
-      const {alternate_cmyk: [c,m,y,k], tint} = s.color.Spot;
+      const {alternate_cmyk, tint} = s.color.Spot;
+      const [c,m,y,k] = alternate_cmyk;
       return `rgb(${255*(1-c*tint)*(1-k*tint)},${255*(1-m*tint)*(1-k*tint)},${255*(1-y*tint)*(1-k*tint)})`;
     }
     return "gray";
