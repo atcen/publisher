@@ -1,4 +1,4 @@
-use publisher_core::{Pt, TextAlignment};
+use publisher_core::{Pt, TextAlignment, KerningMode};
 use serde::{Deserialize, Serialize};
 
 pub fn init() {
@@ -32,7 +32,7 @@ pub struct Feature {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Variation {
     pub tag: String, // 4-character tag like "wght", "wdth"
-    pub value: f32,
+    pub value: f64,
 }
 
 pub struct TypographyEngine {
@@ -46,6 +46,12 @@ impl TypographyEngine {
         }
     }
 
+    pub fn get_variation_axes(&self, font_data: &[u8]) -> Vec<publisher_core::FontVariationAxis> {
+        let _hb_face = harfbuzz_rs::Face::from_bytes(font_data, 0);
+        let axes = Vec::new();
+        axes
+    }
+
     pub fn shape_text(
         &self,
         text: &str,
@@ -54,6 +60,7 @@ impl TypographyEngine {
         _alignment: TextAlignment,
         features: &[Feature],
         variations: &[Variation],
+        kerning_mode: KerningMode,
     ) -> Result<ShapedText, String> {
         // 1. Create HarfBuzz face and font
         let hb_face = harfbuzz_rs::Face::from_bytes(font_data, 0);
@@ -68,7 +75,7 @@ impl TypographyEngine {
         // 3. Apply Variations (for Variable Fonts)
         let hb_variations: Vec<harfbuzz_rs::Variation> = variations
             .iter()
-            .map(|v| harfbuzz_rs::Variation::new(&v.tag, v.value))
+            .map(|v| harfbuzz_rs::Variation::new(&v.tag, v.value as f32))
             .collect();
         hb_font.set_variations(&hb_variations);
 
@@ -76,14 +83,26 @@ impl TypographyEngine {
         let buffer = harfbuzz_rs::UnicodeBuffer::new().add_str(text);
         
         // Convert our features to HarfBuzz features
-        let hb_features: Vec<harfbuzz_rs::Feature> = features
+        let mut hb_features: Vec<harfbuzz_rs::Feature> = features
             .iter()
             .map(|f| harfbuzz_rs::Feature::new(&f.tag, f.value, 0..text.len()))
             .collect();
 
+        // 5. Apply Kerning Mode
+        match kerning_mode {
+            KerningMode::Metric | KerningMode::Optical => {
+                // Metric is HarfBuzz default (kern feature active)
+                hb_features.push(harfbuzz_rs::Feature::new("kern", 1, 0..text.len()));
+            }
+            KerningMode::None => {
+                // Explicitly disable kern feature
+                hb_features.push(harfbuzz_rs::Feature::new("kern", 0, 0..text.len()));
+            }
+        }
+
         let output = harfbuzz_rs::shape(&hb_font, buffer, &hb_features);
 
-        // 5. Extract glyph positions
+        // 6. Extract glyph positions
         let positions = output.get_glyph_positions();
         let infos = output.get_glyph_infos();
 
@@ -116,7 +135,4 @@ mod tests {
     fn test_typography_init() {
         init();
     }
-
-    // Note: To test shape_text, we would need a valid font file.
-    // In a real environment, we'd bundle a small test font (like Roboto or Inter).
 }

@@ -23,6 +23,7 @@ pub struct Document {
     pub swatches: Vec<ColorSwatch>,
     pub styles: Styles,
     pub spreads: Vec<Spread>,
+    pub parent_pages: Vec<ParentPage>,
     pub layers: Vec<Layer>,
     pub baseline_grid: BaselineGrid,
 }
@@ -90,6 +91,20 @@ impl Document {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ParentPage {
+    pub id: String,
+    pub name: String,
+    pub spread: Spread,
+    pub based_on_id: Option<String>,
+}
+
+impl ParentPage {
+    pub fn new(id: &str, name: &str, spread: Spread) -> Self {
+        Self { id: id.to_string(), name: name.to_string(), spread, based_on_id: None }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BaselineGrid {
     pub line_height: Pt,
     pub offset: Pt,
@@ -116,14 +131,31 @@ pub struct FontResource {
     pub style: String,
     #[serde(with = "serde_bytes")]
     pub data: Vec<u8>,
+    #[serde(default)]
+    pub variation_axes: Vec<FontVariationAxis>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FontVariationAxis {
+    pub tag: String,
+    pub name: String,
+    pub min_value: f64,
+    pub max_value: f64,
+    pub default_value: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FontVariationSetting {
+    pub tag: String,
+    pub value: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Layer {
     pub id: String,
     pub name: String,
-    pub visible: boolean,
-    pub locked: boolean,
+    pub visible: bool,
+    pub locked: bool,
     pub color: String,
 }
 
@@ -186,6 +218,7 @@ pub struct Page {
     pub gutter_width: Pt,
     pub guides: Vec<Guide>,
     pub frames: Vec<Frame>,
+    pub applied_parent_id: Option<String>,
 }
 
 impl Page {
@@ -199,6 +232,7 @@ impl Page {
             gutter_width: Pt(12.0),
             guides: Vec::new(),
             frames: Vec::new(),
+            applied_parent_id: None,
         }
     }
 
@@ -210,6 +244,45 @@ impl Page {
         let total_margin = self.margins.inside.0 + self.margins.outside.0;
         let available_width = self.width.0 - total_margin - total_gutter;
         Pt(available_width / self.column_count as f64)
+    }
+
+    pub fn apply_grid_preset(&mut self, preset: GridPreset) {
+        match preset {
+            GridPreset::TwelveColumn => {
+                self.column_count = 12;
+                self.gutter_width = Pt(12.0);
+            }
+            GridPreset::EightColumn => {
+                self.column_count = 8;
+                self.gutter_width = Pt(12.0);
+            }
+            GridPreset::GoldenRatio => {
+                let phi = 1.61803398875;
+                let margin = self.width.0 / (phi + 1.0);
+                self.margins = Margins {
+                    top: Pt(margin / phi),
+                    bottom: Pt(margin),
+                    inside: Pt(margin / phi),
+                    outside: Pt(margin),
+                };
+                self.column_count = 2;
+                self.gutter_width = Pt(12.0);
+            }
+            GridPreset::Fibonacci => {
+                self.column_count = 5;
+                self.gutter_width = Pt(8.0);
+            }
+            GridPreset::Manuscript => {
+                self.column_count = 1;
+                let m = self.width.0 * 0.15;
+                self.margins = Margins {
+                    top: Pt(m),
+                    bottom: Pt(m * 1.5),
+                    inside: Pt(m),
+                    outside: Pt(m * 1.2),
+                };
+            }
+        }
     }
 
     pub fn snap_targets(&self) -> Vec<SnapTarget> {
@@ -233,6 +306,15 @@ impl Page {
         }
         targets
     }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub enum GridPreset {
+    TwelveColumn,
+    EightColumn,
+    GoldenRatio,
+    Fibonacci,
+    Manuscript,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -275,12 +357,15 @@ pub struct Frame {
     pub width: Pt,
     pub height: Pt,
     pub rotation: f64,
+    pub fill_color: Option<String>,
+    pub stroke_color: Option<String>,
+    pub stroke_width: Pt,
     pub data: FrameData,
 }
 
 impl Frame {
     pub fn new(id: &str, layer_id: &str, x: Pt, y: Pt, width: Pt, height: Pt, data: FrameData) -> Self {
-        Self { id: id.to_string(), layer_id: layer_id.to_string(), x, y, width, height, rotation: 0.0, data }
+        Self { id: id.to_string(), layer_id: layer_id.to_string(), x, y, width, height, rotation: 0.0, fill_color: None, stroke_color: None, stroke_width: Pt(0.0), data }
     }
 }
 
@@ -337,13 +422,16 @@ impl ShapeFrame { pub fn new(shape_type: ShapeType) -> Self { Self { shape_type 
 pub enum ShapeType { Rectangle, Ellipse, Path(String) }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ColorSwatch { pub name: String, pub color: Color }
+pub struct ColorSwatch {
+    pub name: String,
+    pub color: Color,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Color {
     Rgb { r: f64, g: f64, b: f64 },
     Cmyk { c: f64, m: f64, y: f64, k: f64 },
-    Spot { name: String, value: String },
+    Spot { name: String, alternate_cmyk: (f64, f64, f64, f64), tint: f64 },
 }
 
 impl Color {
@@ -351,6 +439,9 @@ impl Color {
     pub fn white() -> Self { Color::Cmyk { c: 0.0, m: 0.0, y: 0.0, k: 0.0 } }
     pub fn rgb(r: f64, g: f64, b: f64) -> Self { Color::Rgb { r, g, b } }
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum KerningMode { Metric, Optical, None }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum AlignMode { Left, Center, Right, Top, Middle, Bottom }
@@ -377,7 +468,7 @@ pub fn distribute_frames(frames: &mut [Frame], mode: DistributeMode) {
     if frames.len() < 3 { return; }
     match mode {
         DistributeMode::HorizontalSpacing => { frames.sort_by(|a, b| a.x.0.partial_cmp(&b.x.0).unwrap()); let min_x = frames[0].x.0; let last_idx = frames.len() - 1; let max_x = frames[last_idx].x.0; let total_width: f64 = frames.iter().map(|f| f.width.0).sum(); let available_gap = (max_x + frames[last_idx].width.0) - min_x - total_width; let gap = available_gap / (frames.len() - 1) as f64; let mut current_x = min_x; for f in frames { f.x = Pt(current_x); current_x += f.width.0 + gap; } }
-        DistributeMode::VerticalSpacing => { frames.sort_by(|a, b| a.y.0.partial_cmp(&b.y.0).unwrap()); let min_y = frames[0].y.0; let last_idx = frames.len() - 1; let max_y = frames[last_idx].y.0; let total_height: f64 = frames.iter().map(|f| f.height.0).sum(); let available_gap = (max_y + frames[last_idx].height.0) - min_y - total_height; let gap = available_gap / (frames.len() - 1) as f64; let mut current_y = min_y; for f in frames { f.y = Pt(current_y); current_y += f.height.0 + gap; } }
+        DistributeMode::VerticalSpacing => { frames.sort_by(|a, b| a.y.0.partial_cmp(&b.y.0).unwrap()); let min_y = frames[0].y.0; let last_idx = frames.len() - 1; let max_y = frames[last_idx].y.0; let total_height: f64 = frames.iter().map(|f| f.width.0).sum(); let available_gap = (max_y + frames[last_idx].height.0) - min_y - total_height; let gap = available_gap / (frames.len() - 1) as f64; let mut current_y = min_y; for f in frames { f.y = Pt(current_y); current_y += f.height.0 + gap; } }
     }
 }
 
@@ -426,17 +517,20 @@ pub struct ParagraphStyle {
     pub space_before: Option<Pt>,
     pub space_after: Option<Pt>,
     pub color_swatch: Option<String>,
+    #[serde(default)]
+    pub variation_settings: Vec<FontVariationSetting>,
+    pub kerning_mode: Option<KerningMode>,
 }
 
 impl Default for ParagraphStyle {
     fn default() -> Self {
-        Self { name: "Basic Paragraph".to_string(), based_on: None, next_style: None, font_family: Some("Inter".to_string()), font_style: Some("Regular".to_string()), font_size: Some(Pt(12.0)), leading: Some(Pt(14.4)), tracking: Some(0.0), alignment: Some(TextAlignment::Left), indents: Some(Indents::default()), space_before: Some(Pt(0.0)), space_after: Some(Pt(0.0)), color_swatch: None }
+        Self { name: "Basic Paragraph".to_string(), based_on: None, next_style: None, font_family: Some("Inter".to_string()), font_style: Some("Regular".to_string()), font_size: Some(Pt(12.0)), leading: Some(Pt(14.4)), tracking: Some(0.0), alignment: Some(TextAlignment::Left), indents: Some(Indents::default()), space_before: Some(Pt(0.0)), space_after: Some(Pt(0.0)), color_swatch: None, variation_settings: Vec::new(), kerning_mode: Some(KerningMode::Metric) }
     }
 }
 
 impl ParagraphStyle {
     pub fn new(name: &str) -> Self {
-        Self { name: name.to_string(), based_on: None, next_style: None, font_family: None, font_style: None, font_size: None, leading: None, tracking: None, alignment: None, indents: None, space_before: None, space_after: None, color_swatch: None }
+        Self { name: name.to_string(), based_on: None, next_style: None, font_family: None, font_style: None, font_size: None, leading: None, tracking: None, alignment: None, indents: None, space_before: None, space_after: None, color_swatch: None, variation_settings: Vec::new(), kerning_mode: None }
     }
 }
 
@@ -450,11 +544,14 @@ pub struct CharacterStyle {
     pub leading: Option<Pt>,
     pub tracking: Option<f64>,
     pub color_swatch: Option<String>,
+    #[serde(default)]
+    pub variation_settings: Vec<FontVariationSetting>,
+    pub kerning_mode: Option<KerningMode>,
 }
 
 impl CharacterStyle {
     pub fn new(name: &str) -> Self {
-        Self { name: name.to_string(), based_on: None, font_family: None, font_style: None, font_size: None, leading: None, tracking: None, color_swatch: None }
+        Self { name: name.to_string(), based_on: None, font_family: None, font_style: None, font_size: None, leading: None, tracking: None, color_swatch: None, variation_settings: Vec::new(), kerning_mode: None }
     }
 }
 
@@ -485,6 +582,8 @@ impl Styles {
                 if resolved.space_before.is_none() { resolved.space_before = base_style.space_before; }
                 if resolved.space_after.is_none() { resolved.space_after = base_style.space_after; }
                 if resolved.color_swatch.is_none() { resolved.color_swatch = base_style.color_swatch.clone(); }
+                if resolved.variation_settings.is_empty() { resolved.variation_settings = base_style.variation_settings.clone(); }
+                if resolved.kerning_mode.is_none() { resolved.kerning_mode = base_style.kerning_mode; }
                 current_based_on = base_style.based_on.as_ref();
             } else { break; }
         }
@@ -507,6 +606,8 @@ impl Styles {
                 if resolved.leading.is_none() { resolved.leading = base_style.leading; }
                 if resolved.tracking.is_none() { resolved.tracking = base_style.tracking; }
                 if resolved.color_swatch.is_none() { resolved.color_swatch = base_style.color_swatch.clone(); }
+                if resolved.variation_settings.is_empty() { resolved.variation_settings = base_style.variation_settings.clone(); }
+                if resolved.kerning_mode.is_none() { resolved.kerning_mode = base_style.kerning_mode; }
                 current_based_on = base_style.based_on.as_ref();
             } else { break; }
         }
@@ -528,7 +629,7 @@ mod tests {
     fn test_document_creation() {
         let doc = Document {
             metadata: Metadata { name: "Test Doc".to_string(), author: "".to_string(), description: "".to_string(), created_at: 0, modified_at: 0, dpi: 300, default_unit: Unit::Point, default_bleed: Bleed { top: Pt(0.0), bottom: Pt(0.0), inside: Pt(0.0), outside: Pt(0.0) }, color_profile: "sRGB".to_string(), facing_pages: true },
-            fonts: vec![], icc_profiles: vec![], swatches: vec![], styles: Styles { paragraph_styles: vec![], character_styles: vec![], object_styles: vec![] }, spreads: vec![], layers: vec![Layer::new("l1", "Layer 1")], baseline_grid: BaselineGrid::default(),
+            fonts: vec![], icc_profiles: vec![], swatches: vec![], styles: Styles { paragraph_styles: vec![], character_styles: vec![], object_styles: vec![] }, spreads: vec![], parent_pages: vec![], layers: vec![Layer::new("l1", "Layer 1")], baseline_grid: BaselineGrid::default(),
         };
         assert_eq!(doc.metadata.name, "Test Doc");
     }

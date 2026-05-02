@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use tauri::State;
+use publisher_core::{Color as CoreColor, Page, GridPreset};
 
 /// Check undo/redo availability and counts
 #[derive(Debug, Serialize, Deserialize)]
@@ -187,6 +188,26 @@ pub fn get_history_state(
         }),
         None => Err("No document loaded".to_string()),
     }
+}
+
+/// Command: Convert color between RGB and CMYK
+#[tauri::command]
+pub fn convert_color(
+    state: State<'_, crate::AppState>,
+    color: CoreColor,
+) -> Result<CoreColor, String> {
+    let mut color_engine = state
+        .color_engine
+        .lock()
+        .map_err(|e| format!("Failed to acquire lock: {}", e))?;
+    Ok(color_engine.convert_core_color(&color))
+}
+
+/// Command: Apply a grid preset to a page
+#[tauri::command]
+pub fn apply_grid_preset(mut page: Page, preset: GridPreset) -> Result<Page, String> {
+    page.apply_grid_preset(preset);
+    Ok(page)
 }
 
 #[cfg(test)]

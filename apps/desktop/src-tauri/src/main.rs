@@ -4,9 +4,10 @@
 mod commands;
 mod document_service;
 
-use commands::{get_history_state, get_redo_history, get_undo_history, redo, undo};
+use commands::{get_history_state, get_redo_history, get_undo_history, redo, undo, convert_color, apply_grid_preset};
 use document_service::{DocumentService, DocumentServiceError};
 use publisher_core::DocumentState;
+use publisher_color::ColorEngine;
 use serde_json::json;
 use std::fs;
 use std::io::Write;
@@ -19,6 +20,7 @@ use tauri_plugin_dialog::DialogExt;
 pub struct AppState {
     pub document_service: Mutex<DocumentService>,
     pub document_state: Mutex<Option<DocumentState>>,
+    pub color_engine: Mutex<ColorEngine>,
 }
 
 /// Create a new empty document
@@ -355,6 +357,8 @@ async fn mark_document_modified(
 fn main() {
     publisher_renderer::init();
 
+    let color_engine = ColorEngine::new().expect("Failed to initialize color engine");
+
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
@@ -362,6 +366,7 @@ fn main() {
         .manage(AppState {
             document_service: Mutex::new(DocumentService::new()),
             document_state: Mutex::new(None),
+            color_engine: Mutex::new(color_engine),
         })
         .invoke_handler(tauri::generate_handler![
             // Document lifecycle commands
@@ -381,7 +386,11 @@ fn main() {
             redo,
             get_undo_history,
             get_redo_history,
-            get_history_state
+            get_history_state,
+            // Color commands
+            convert_color,
+            // Layout commands
+            apply_grid_preset
         ])
         .setup(|_app| Ok(()))
         .run(tauri::generate_context!())
