@@ -4,6 +4,7 @@
   import { prefsStore } from "../../stores/prefs.svelte";
   import { convertUnit } from "../../utils/geometry";
   import { getSwatchColor } from "../../utils/color";
+  import type { Page, Frame, Guide, ImageFrame } from "../../types";
 
   let { 
     onPageMouseDown, 
@@ -16,17 +17,17 @@
   } = $props();
 </script>
 
-{#snippet ParentContent(parentId: string, pageIdx: number)}
+{#snippet ParentContent(page: Page, parentId: string, pageIdxInSpread: number)}
   {#each docStore.doc.parent_pages.filter(p => p.id === parentId) as parent}
     {#if parent.based_on_id}
-      {@render ParentContent(parent.based_on_id, pageIdx)}
+      {@render ParentContent(page, parent.based_on_id, pageIdxInSpread)}
     {/if}
-    {#if parent.spread.pages[pageIdx]}
+    {#if parent.spread.pages[pageIdxInSpread]}
       <div class="parent-content">
-        {#each parent.spread.pages[pageIdx].frames as frame}
+        {#each parent.spread.pages[pageIdxInSpread].frames as frame}
           <div 
             class="frame parent-frame" 
-            onclick={(e) => { e.stopPropagation(); docStore.overrideParentFrame(docStore.activePage!, frame); }} 
+            onclick={(e) => { e.stopPropagation(); docStore.overrideParentFrame(page, frame); }} 
             style="left: {frame.x}px; top: {frame.y}px; width: {frame.width}px; height: {frame.height}px; background: {frame.fill_color ? getSwatchColor(frame.fill_color, docStore.doc) : 'transparent'}; border-width: {frame.stroke_width}px; border-color: {frame.stroke_color ? getSwatchColor(frame.stroke_color, docStore.doc) : 'transparent'};"
           >
              {#if frame.data.Text}{frame.data.Text.content}{/if}
@@ -96,7 +97,7 @@
             {/each}
             
             {#if page.applied_parent_id}
-              {@render ParentContent(page.applied_parent_id, pageIdxInSpread)}
+              {@render ParentContent(page, page.applied_parent_id, pageIdxInSpread)}
             {/if}
 
             {#each [...docStore.doc.layers].reverse() as layer}

@@ -177,7 +177,7 @@ export type SnapTarget =
   | { Margin: { position: Pt, side: Side } }
   | { Column: { position: Pt, index: number } }
   | { Guide: { position: Pt, orientation: Orientation, id?: string } }
-  | { Object: { position: Pt, orientation: Orientation, object_id: string } }
+  | { Object: { position: Pt, orientation: Orientation, frame_id: string } }
   | { Baseline: { position: Pt } };
 
 export type AlignMode = 'Left' | 'Center' | 'Right' | 'Top' | 'Middle' | 'Bottom';

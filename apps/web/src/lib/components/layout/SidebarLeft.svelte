@@ -35,10 +35,10 @@
           />
           <select 
             class="parent-based-on" 
-            bind:value={parent.based_on_id} 
-            onchange={() => docStore.markModified()}
+            value={parent.based_on_id ?? ""} 
+            onchange={(e) => { parent.based_on_id = (e.target as HTMLSelectElement).value || undefined; docStore.markModified(); }}
           >
-            <option value={undefined}>[Keine]</option>
+            <option value="">[Keine]</option>
             {#each docStore.doc.parent_pages.filter(p => p.id !== parent.id) as op}
               <option value={op.id}>Basis: {op.name}</option>
             {/each}

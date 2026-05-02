@@ -156,8 +156,11 @@
     {@const page = docStore.activePage}
     <div class="properties">
       <label>Elternseite 
-        <select bind:value={page.applied_parent_id} onchange={() => docStore.markModified()}>
-          <option value={undefined}>[Keine]</option>
+        <select 
+          value={page.applied_parent_id ?? ""} 
+          onchange={(e) => { page.applied_parent_id = (e.target as HTMLSelectElement).value || undefined; docStore.markModified(); }}
+        >
+          <option value="">[Keine]</option>
           {#each docStore.doc.parent_pages as p}
             <option value={p.id}>{p.name}</option>
           {/each}

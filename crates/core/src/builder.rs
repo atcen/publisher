@@ -111,7 +111,9 @@ impl DocumentBuilder {
                     bleed: None,
                     column_count: self.column_count,
                     gutter_width: self.gutter_width,
+                    guides: Vec::new(),
                     frames: Vec::new(),
+                    applied_parent_id: None,
                 }],
             });
         }
@@ -147,7 +149,9 @@ impl DocumentBuilder {
             swatches,
             styles: Styles::default(),
             spreads,
+            parent_pages: vec![],
             layers,
+            baseline_grid: crate::BaselineGrid::default(),
         };
 
         doc.reorganize_spreads();

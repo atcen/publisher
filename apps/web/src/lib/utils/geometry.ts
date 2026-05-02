@@ -33,12 +33,12 @@ export function buildSnapTargets(page: Page, selectedFrameIds: string[], baselin
   page.frames
     .filter(f => !selectedFrameIds.includes(f.id))
     .forEach(f => {
-      targets.push({ Object: { position: f.x, orientation: 'Vertical', object_id: f.id } });
-      targets.push({ Object: { position: f.x + f.width / 2, orientation: 'Vertical', object_id: f.id } });
-      targets.push({ Object: { position: f.x + f.width, orientation: 'Vertical', object_id: f.id } });
-      targets.push({ Object: { position: f.y, orientation: 'Horizontal', object_id: f.id } });
-      targets.push({ Object: { position: f.y + f.height / 2, orientation: 'Horizontal', object_id: f.id } });
-      targets.push({ Object: { position: f.y + f.height, orientation: 'Horizontal', object_id: f.id } });
+      targets.push({ Object: { position: f.x, orientation: 'Vertical', frame_id: f.id } });
+      targets.push({ Object: { position: f.x + f.width / 2, orientation: 'Vertical', frame_id: f.id } });
+      targets.push({ Object: { position: f.x + f.width, orientation: 'Vertical', frame_id: f.id } });
+      targets.push({ Object: { position: f.y, orientation: 'Horizontal', frame_id: f.id } });
+      targets.push({ Object: { position: f.y + f.height / 2, orientation: 'Horizontal', frame_id: f.id } });
+      targets.push({ Object: { position: f.y + f.height, orientation: 'Horizontal', frame_id: f.id } });
     });
     
   if (baselineGrid.visible) {

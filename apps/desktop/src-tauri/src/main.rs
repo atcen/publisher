@@ -386,7 +386,12 @@ async fn save_recovery_file(
     document_json: String,
 ) -> Result<(), String> {
     let recovery_path = state.recovery_dir.join("autosave.recovery");
-    fs::write(&recovery_path, document_json).map_err(|e| format!("Failed to write recovery file: {}", e))?;
+    tauri::async_runtime::spawn_blocking(move || {
+        fs::write(&recovery_path, document_json)
+    })
+    .await
+    .map_err(|e| format!("Failed to spawn blocking task: {}", e))?
+    .map_err(|e| format!("Failed to write recovery file: {}", e))?;
     Ok(())
 }
 

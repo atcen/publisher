@@ -18,8 +18,16 @@
           <span>Zuletzt geöffnet</span>
           <div class="submenu-content">
             {#each prefsStore.prefs.recent_files as path}
-              <button onclick={() => docStore.openRecent(path)}>{path.split('/').pop()}</button>
+              <button onclick={() => docStore.openRecent(path)}>
+                {path.split(/[/\\]/).pop()}
+              </button>
             {/each}
+            {#if prefsStore.prefs.recent_files.length > 0}
+              <div class="menu-separator"></div>
+              <button onclick={() => { prefsStore.prefs.recent_files = []; prefsStore.save(); }}>
+                Liste löschen
+              </button>
+            {/if}
           </div>
         </div>
         <button onclick={() => docStore.save()}>Speichern</button>
@@ -47,5 +55,6 @@
   .menu-submenu { position: relative; padding: 8px; font-size: 12px; }
   .submenu-content { display: none; position: absolute; top: 0; left: 100%; background: #2d2d2d; border: 1px solid #111; min-width: 150px; }
   .menu-submenu:hover .submenu-content { display: block; }
+  .menu-separator { height: 1px; background: #444; margin: 4px 0; }
   .doc-title { margin-left: auto; font-style: italic; color: #888; }
 </style>

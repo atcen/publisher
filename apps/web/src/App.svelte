@@ -39,8 +39,21 @@
   let linkingSourceFrameId = $state<string | null>(null);
   let isLinking = $state(false);
 
+  let autoSaveInterval: number;
+
+  $effect(() => {
+    if (autoSaveInterval) clearInterval(autoSaveInterval);
+    if (prefsStore.prefs.autosave_interval > 0) {
+      autoSaveInterval = setInterval(async () => {
+        if (docStore.hasUnsavedChanges) {
+          try { await invoke("save_recovery_file", { documentJson: JSON.stringify(docStore.doc) }); }
+          catch (e) { console.error("Auto-save failed", e); }
+        }
+      }, prefsStore.prefs.autosave_interval * 1000) as unknown as number;
+    }
+  });
+
   onMount(() => {
-    let autoSaveInterval: number;
     const init = async () => {
       await prefsStore.load();
       try {
@@ -50,13 +63,6 @@
           docStore.hasUnsavedChanges = true;
         } else { await invoke("clear_recovery_file"); }
       } catch (e) { console.error("Recovery check failed", e); }
-
-      autoSaveInterval = setInterval(async () => {
-        if (docStore.hasUnsavedChanges) {
-          try { await invoke("save_recovery_file", { documentJson: JSON.stringify(docStore.doc) }); }
-          catch (e) { console.error("Auto-save failed", e); }
-        }
-      }, prefsStore.prefs.autosave_interval * 1000) as unknown as number;
     };
     init();
 
