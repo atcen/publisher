@@ -26,6 +26,7 @@
     role="dialog" 
     aria-modal="true" 
     aria-labelledby="modal-title"
+    tabindex="-1"
   >
     <div class="modal-header" id="modal-title">Farbfeld bearbeiten</div>
     <div class="modal-body">
