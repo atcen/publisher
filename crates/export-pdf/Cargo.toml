@@ -5,4 +5,8 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
-publisher-core = { path = "../core" }
+font-kit = "0.14.3"
+image = "0.25.10"
+printpdf = "=0.7.0"
+publisher-color = { version = "0.1.0", path = "../color" }
+publisher-core = { version = "0.1.0", path = "../core" }
