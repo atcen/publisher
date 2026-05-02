@@ -235,6 +235,19 @@ pub fn convert_color(
     Ok(color_engine.convert_core_color(&color))
 }
 
+/// Command: Get RGB preview for a color
+#[tauri::command]
+pub fn get_color_preview(
+    state: State<'_, crate::AppState>,
+    color: CoreColor,
+) -> Result<CoreColor, String> {
+    let color_engine = state
+        .color_engine
+        .lock()
+        .map_err(|e| format!("Failed to acquire lock: {}", e))?;
+    Ok(color_engine.convert_core_color(&color))
+}
+
 /// Command: Apply a grid preset to a page
 #[tauri::command]
 pub fn apply_grid_preset(mut page: Page, preset: GridPreset) -> Result<Page, String> {

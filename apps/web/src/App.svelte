@@ -281,11 +281,11 @@
 </main>
 
 <ModalManager 
-  bind:currentEditingStyle 
-  bind:currentEditingCharStyle 
-  bind:currentEditingSwatch 
+  bind:currentEditingStyle
+  bind:currentEditingCharStyle
+  bind:currentEditingSwatch
+  onCloseSwatch={() => currentEditingSwatch = null}
 />
-
 <style>
   :global(body) { margin: 0; padding: 0; background-color: #1e1e1e; color: #ccc; font-family: sans-serif; overflow: hidden; }
   main { display: flex; flex-direction: column; height: 100vh; position: relative; }

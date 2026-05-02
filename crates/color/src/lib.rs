@@ -85,7 +85,11 @@ impl ColorEngine {
             t.transform_pixels(&input, &mut output);
             Ok((output[0][0], output[0][1], output[0][2]))
         } else {
-            Err("Transform not initialized (likely incompatible profiles)".to_string())
+            // Naive fallback conversion
+            let r = (1.0 - c) * (1.0 - k);
+            let g = (1.0 - m) * (1.0 - k);
+            let b = (1.0 - y) * (1.0 - k);
+            Ok((r, g, b))
         }
     }
 
@@ -105,7 +109,23 @@ impl ColorEngine {
                     color.clone()
                 }
             }
-            _ => color.clone(),
+            CoreColor::Spot {
+                alternate_cmyk,
+                tint,
+                ..
+            } => {
+                let (c, m, y, k) = *alternate_cmyk;
+                // Apply tint to the CMYK values for preview
+                let tc = c * tint;
+                let tm = m * tint;
+                let ty = y * tint;
+                let tk = k * tint;
+                if let Ok((r, g, b)) = self.cmyk_to_rgb(tc, tm, ty, tk) {
+                    CoreColor::Rgb { r, g, b }
+                } else {
+                    color.clone()
+                }
+            }
         }
     }
 }
@@ -130,5 +150,23 @@ mod tests {
             Intent::RelativeColorimetric,
         );
         assert!(transform.is_ok());
+    }
+
+    #[test]
+    fn test_spot_to_rgb_conversion() {
+        let engine = ColorEngine::new().unwrap();
+        let spot = CoreColor::Spot {
+            name: "PANTONE 185 C".to_string(),
+            alternate_cmyk: (0.0, 0.91, 0.76, 0.0),
+            tint: 1.0,
+        };
+        let rgb = engine.convert_core_color(&spot);
+        if let CoreColor::Rgb { r, g, b } = rgb {
+            assert!(r > 0.0);
+            assert!(g < 0.5);
+            assert!(b < 0.5);
+        } else {
+            panic!("Expected Rgb color");
+        }
     }
 }
