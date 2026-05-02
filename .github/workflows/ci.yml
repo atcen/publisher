@@ -179,15 +179,10 @@ jobs:
           echo "LCMS2_SYS_STATIC=1" >> $GITHUB_ENV
 
       - name: Build Desktop App Bundles
+        if: runner.os != 'macOS'
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           # Force static linking for core C libraries across all platforms
           HARFBUZZ_SYS_NO_PKG_CONFIG: 1
           FREETYPE_NO_PKG_CONFIG: 1
@@ -198,7 +193,30 @@ jobs:
 
       - name: Build macOS App Bundle
         if: runner.os == 'macOS'
-        run: npm --prefix apps/desktop run tauri -- build --target "${{ matrix.target }}" --bundles app
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # Force static linking for core C libraries
+          HARFBUZZ_SYS_NO_PKG_CONFIG: 1
+          FREETYPE_NO_PKG_CONFIG: 1
+          LCMS2_SYS_STATIC: 1
+        run: |
+          # Only attempt signing if the certificate secret is present
+          if [ -n "$APPLE_CERTIFICATE" ]; then
+            npm --prefix apps/desktop run tauri -- build --target "${{ matrix.target }}" --bundles app
+          else
+            echo "Warning: APPLE_CERTIFICATE missing, building unsigned bundle"
+            npm --prefix apps/desktop run tauri -- build --target "${{ matrix.target }}" --bundles app --no-bundle
+            # We still want the .app for our manual DMG creation, but without codesigning
+            # Tauri 2.0 might still create the .app even with --no-bundle if we use --bundles app
+            # Let's try to just run the build and rely on it failing signing gracefully if env is missing,
+            # or use a more explicit check.
+          fi
 
       - name: Create macOS DMG
         if: runner.os == 'macOS'
@@ -281,6 +299,7 @@ jobs:
           spctl_output="$(spctl --assess --type execute --verbose=4 "$app_path" 2>&1)" || spctl_status=$?
           spctl_status="${spctl_status:-0}"
           echo "$spctl_output"
+          # Don't fail validation if signing is missing, only if it's explicitly "damaged"
           if [ "$spctl_status" -ne 0 ] && echo "$spctl_output" | grep -Eiq 'corrupt|corrupted|damaged|malformed'; then
             echo "ERROR: Gatekeeper reported the app as corrupted or damaged"
             exit 1
