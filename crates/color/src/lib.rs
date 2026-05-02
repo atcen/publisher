@@ -85,7 +85,10 @@ impl ColorEngine {
             t.transform_pixels(&input, &mut output);
             Ok((output[0][0], output[0][1], output[0][2]))
         } else {
-            // Naive fallback conversion
+            // Fallback: Naive CMYK -> RGB when ICC profile not available.
+            // This is NOT color-accurate; use only for UI preview purposes.
+            // For accurate color reproduction (e.g., during PDF/X export),
+            // valid ICC profiles must be loaded and utilized.
             let r = (1.0 - c) * (1.0 - k);
             let g = (1.0 - m) * (1.0 - k);
             let b = (1.0 - y) * (1.0 - k);
