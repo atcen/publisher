@@ -247,12 +247,14 @@ jobs:
           hdiutil attach -readonly -nobrowse -mountpoint "$mount_point" "$dmg"
 
           app_path="$mount_point/Publisher.app"
-          executable_path="$app_path/Contents/MacOS/Publisher"
           if [ ! -d "$app_path" ]; then
             echo "ERROR: mounted DMG does not contain Publisher.app"
             find "$mount_point" -maxdepth 3 -print
             exit 1
           fi
+
+          bundle_executable="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app_path/Contents/Info.plist")"
+          executable_path="$app_path/Contents/MacOS/$bundle_executable"
           if [ ! -x "$executable_path" ]; then
             echo "ERROR: Publisher.app is missing a launchable executable at $executable_path"
             find "$app_path/Contents/MacOS" -maxdepth 1 -print 2>/dev/null || true

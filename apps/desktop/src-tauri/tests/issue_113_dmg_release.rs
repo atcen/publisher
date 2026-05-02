@@ -55,8 +55,8 @@ fn macos_build_mounts_dmg_and_checks_publisher_app_contents() {
         "Mounted DMG validation must assert Publisher.app is present"
     );
     assert!(
-        workflow.contains("Contents/MacOS"),
-        "Mounted DMG validation must assert Publisher.app contains a launchable executable"
+        workflow.contains("CFBundleExecutable") && workflow.contains("Contents/MacOS"),
+        "Mounted DMG validation must assert Publisher.app contains its declared launchable executable"
     );
     assert!(
         workflow.contains("hdiutil detach"),
