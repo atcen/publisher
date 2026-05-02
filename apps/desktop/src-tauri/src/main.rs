@@ -4,21 +4,50 @@
 mod commands;
 mod document_service;
 
-use commands::{get_history_state, get_redo_history, get_undo_history, redo, undo};
+use commands::{
+    align_frames, apply_grid_preset, convert_color, distribute_frames, find_snap,
+    get_history_state, get_redo_history, get_undo_history, redo, undo,
+};
 use document_service::{DocumentService, DocumentServiceError};
+use publisher_color::ColorEngine;
 use publisher_core::DocumentState;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::fs;
 use std::io::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
-use tauri::Runtime;
+use tauri::{Manager, Runtime};
 use tauri_plugin_dialog::DialogExt;
+
+/// Application preferences stored on disk
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AppPreferences {
+    pub theme: String,
+    pub default_unit: String,
+    pub autosave_interval: u32,
+    #[serde(default)]
+    pub recent_files: Vec<String>,
+}
+
+impl Default for AppPreferences {
+    fn default() -> Self {
+        Self {
+            theme: "dark".to_string(),
+            default_unit: "pt".to_string(),
+            autosave_interval: 60,
+            recent_files: Vec::new(),
+        }
+    }
+}
 
 /// Application state containing both document service and history/undo-redo state
 pub struct AppState {
     pub document_service: Mutex<DocumentService>,
     pub document_state: Mutex<Option<DocumentState>>,
+    pub color_engine: Mutex<ColorEngine>,
+    pub recovery_dir: PathBuf,
+    pub preferences_path: PathBuf,
 }
 
 /// Create a new empty document
@@ -73,6 +102,7 @@ async fn open_document<R: Runtime>(
                         "success": true,
                         "document_id": id.0.to_string(),
                         "document_name": doc_name,
+                        "file_path": path_str,
                         "message": format!("Opened: {}", doc_name)
                     })
                     .to_string())
@@ -352,16 +382,94 @@ async fn mark_document_modified(
     .to_string())
 }
 
+/// Command: Save a recovery file for auto-save
+#[tauri::command]
+async fn save_recovery_file(
+    state: tauri::State<'_, AppState>,
+    document_json: String,
+) -> Result<(), String> {
+    let recovery_path = state.recovery_dir.join("autosave.recovery");
+    tauri::async_runtime::spawn_blocking(move || fs::write(&recovery_path, document_json))
+        .await
+        .map_err(|e| format!("Failed to spawn blocking task: {}", e))?
+        .map_err(|e| format!("Failed to write recovery file: {}", e))?;
+    Ok(())
+}
+
+/// Command: Check for existing recovery files
+#[tauri::command]
+async fn check_recovery_file(state: tauri::State<'_, AppState>) -> Result<Option<String>, String> {
+    let recovery_path = state.recovery_dir.join("autosave.recovery");
+    if recovery_path.exists() {
+        fs::read_to_string(&recovery_path)
+            .map(Some)
+            .map_err(|e| format!("Failed to read recovery file: {}", e))
+    } else {
+        Ok(None)
+    }
+}
+
+/// Command: Clear the recovery file (clean exit/manual save)
+#[tauri::command]
+async fn clear_recovery_file(state: tauri::State<'_, AppState>) -> Result<(), String> {
+    let recovery_path = state.recovery_dir.join("autosave.recovery");
+    if recovery_path.exists() {
+        fs::remove_file(&recovery_path)
+            .map_err(|e| format!("Failed to delete recovery file: {}", e))?;
+    }
+    Ok(())
+}
+
+/// Command: Save application preferences
+#[tauri::command]
+async fn save_preferences(
+    state: tauri::State<'_, AppState>,
+    preferences: AppPreferences,
+) -> Result<(), String> {
+    let json = serde_json::to_string_pretty(&preferences).map_err(|e| e.to_string())?;
+    fs::write(&state.preferences_path, json).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Command: Load application preferences
+#[tauri::command]
+async fn load_preferences(state: tauri::State<'_, AppState>) -> Result<AppPreferences, String> {
+    if state.preferences_path.exists() {
+        let json = fs::read_to_string(&state.preferences_path).map_err(|e| e.to_string())?;
+        let prefs: AppPreferences = serde_json::from_str(&json).map_err(|e| e.to_string())?;
+        Ok(prefs)
+    } else {
+        Ok(AppPreferences::default())
+    }
+}
+
 fn main() {
     publisher_renderer::init();
+
+    let color_engine = ColorEngine::new().expect("Failed to initialize color engine");
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
-        .manage(AppState {
-            document_service: Mutex::new(DocumentService::new()),
-            document_state: Mutex::new(None),
+        .setup(|app| {
+            // Setup directories
+            let app_data_dir = app
+                .path()
+                .app_data_dir()
+                .expect("Failed to get app data dir");
+            let recovery_dir = app_data_dir.join("recovery");
+            let preferences_path = app_data_dir.join("preferences.json");
+            fs::create_dir_all(&recovery_dir).expect("Failed to create recovery directory");
+
+            app.manage(AppState {
+                document_service: Mutex::new(DocumentService::new()),
+                document_state: Mutex::new(None),
+                color_engine: Mutex::new(color_engine),
+                recovery_dir,
+                preferences_path,
+            });
+            Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             // Document lifecycle commands
@@ -381,9 +489,22 @@ fn main() {
             redo,
             get_undo_history,
             get_redo_history,
-            get_history_state
+            get_history_state,
+            // Color commands
+            convert_color,
+            // Layout commands
+            apply_grid_preset,
+            find_snap,
+            align_frames,
+            distribute_frames,
+            // Recovery commands
+            save_recovery_file,
+            check_recovery_file,
+            clear_recovery_file,
+            // Preferences commands
+            save_preferences,
+            load_preferences
         ])
-        .setup(|_app| Ok(()))
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

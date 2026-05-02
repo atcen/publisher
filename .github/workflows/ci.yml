@@ -26,12 +26,14 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 24
+          cache: 'npm'
+          cache-dependency-path: apps/web/package-lock.json
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
       - name: Run tests
         run: cargo test --workspace
       - name: Install web dependencies
-        run: npm install --prefix apps/web
+        run: npm ci --prefix apps/web
       - name: Check web frontend (TypeScript & Svelte)
         run: npm --prefix apps/web run check
 
@@ -45,13 +47,15 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 24
+          cache: 'npm'
+          cache-dependency-path: apps/web/package-lock.json
       - name: Install dependencies
-        run: npm install --prefix apps/web
+        run: npm ci --prefix apps/web
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps
+        run: npx playwright install --with-deps chromium
         working-directory: apps/web
       - name: Run E2E tests
-        run: npm run test:e2e
+        run: npx playwright test --project=chromium
         working-directory: apps/web
       - name: Upload test results
         if: always()

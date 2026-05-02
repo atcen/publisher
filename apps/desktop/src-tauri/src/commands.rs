@@ -1,5 +1,38 @@
+use publisher_core::{
+    AlignMode, Color as CoreColor, DistributeMode, Frame, GridPreset, Page, Pt, SnapEngine,
+    SnapResult, SnapTarget,
+};
 use serde::{Deserialize, Serialize};
 use tauri::State;
+
+/// Command: Find snapping points for an object
+#[tauri::command]
+pub fn find_snap(
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+    targets: Vec<SnapTarget>,
+    threshold: f64,
+) -> Result<SnapResult, String> {
+    let engine = SnapEngine::new(threshold);
+    Ok(engine.find_snap(x, y, width, height, &targets))
+}
+
+/// Command: Align multiple frames
+#[tauri::command]
+pub fn align_frames(frames: Vec<Frame>, mode: AlignMode) -> Result<Vec<(String, Pt, Pt)>, String> {
+    Ok(publisher_core::align_frames(&frames, mode))
+}
+
+/// Command: Distribute multiple frames
+#[tauri::command]
+pub fn distribute_frames(
+    frames: Vec<Frame>,
+    mode: DistributeMode,
+) -> Result<Vec<(String, Pt, Pt)>, String> {
+    Ok(publisher_core::distribute_frames(&frames, mode))
+}
 
 /// Check undo/redo availability and counts
 #[derive(Debug, Serialize, Deserialize)]
@@ -187,6 +220,26 @@ pub fn get_history_state(
         }),
         None => Err("No document loaded".to_string()),
     }
+}
+
+/// Command: Convert color between RGB and CMYK
+#[tauri::command]
+pub fn convert_color(
+    state: State<'_, crate::AppState>,
+    color: CoreColor,
+) -> Result<CoreColor, String> {
+    let color_engine = state
+        .color_engine
+        .lock()
+        .map_err(|e| format!("Failed to acquire lock: {}", e))?;
+    Ok(color_engine.convert_core_color(&color))
+}
+
+/// Command: Apply a grid preset to a page
+#[tauri::command]
+pub fn apply_grid_preset(mut page: Page, preset: GridPreset) -> Result<Page, String> {
+    page.apply_grid_preset(preset);
+    Ok(page)
 }
 
 #[cfg(test)]

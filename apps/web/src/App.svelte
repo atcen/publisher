@@ -1,301 +1,294 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
+  
+  // Stores
+  import { docStore } from "./lib/stores/document.svelte";
+  import { uiStore } from "./lib/stores/ui.svelte";
+  import { prefsStore } from "./lib/stores/prefs.svelte";
+  
+  // Types
+  import type { Page, Frame, Guide, ImageFrame, ParagraphStyle, CharacterStyle, ColorSwatch } from "./lib/types";
+  
+  
+  // Components
+  import MenuBar from "./lib/components/layout/MenuBar.svelte";
+  import Toolbar from "./lib/components/layout/Toolbar.svelte";
+  import SidebarLeft from "./lib/components/layout/SidebarLeft.svelte";
+  import SidebarRight from "./lib/components/layout/SidebarRight.svelte";
+  import Workspace from "./lib/components/workspace/Workspace.svelte";
+  import StatusBar from "./lib/components/layout/StatusBar.svelte";
+  import FindBar from "./lib/components/layout/FindBar.svelte";
+  import ModalManager from "./lib/components/ModalManager.svelte";
 
-  type Pt = number;
+  // Transient edit state (will move to specialized stores later)
+  let currentEditingStyle = $state<ParagraphStyle | null>(null);
+  let currentEditingCharStyle = $state<CharacterStyle | null>(null);
+  let currentEditingSwatch = $state<ColorSwatch | null>(null);
 
-  interface TextFrame {
-    x: Pt;
-    y: Pt;
-    width: Pt;
-    height: Pt;
-    content: string;
-  }
+  // Interaction State
+  let isDragging = false;
+  let isResizing = false;
+  let isCreating = false;
+  let isDraggingGuide = false;
+  let dragStart = { x: 0, y: 0 };
+  let initial = { x: 0, y: 0, w: 0, h: 0 };
+  let resizeHandleIdx = "";
+  let currentCreating: Frame | null = null;
+  let currentDraggingGuide = $state<{ page: Page, guide: Guide } | null>(null);
+  let linkingSourceFrameId = $state<string | null>(null);
+  let isLinking = $state(false);
 
-  interface Frame {
-    id: string;
-    Text?: TextFrame;
-  }
+  let autoSaveInterval: number;
 
-  interface Page {
-    width: Pt;
-    height: Pt;
-    frames: Frame[];
-  }
-
-  interface Spread {
-    pages: Page[];
-  }
-
-  interface DocumentMetadata {
-    name: string;
-    author: string;
-    description: string;
-    created_at: number; // Unix seconds
-    modified_at: number; // Unix seconds
-    dpi: number;
-    default_unit: "Point"; // Must match Rust serialization exactly
-    default_bleed: { top: number; bottom: number; inside: number; outside: number };
-    color_profile: string;
-  }
-
-  interface Document {
-    metadata: DocumentMetadata;
-    swatches: unknown[];
-    styles: { paragraph_styles: unknown[]; character_styles: unknown[]; object_styles: unknown[] };
-    spreads: Spread[];
-  }
-
-  let activeTool = $state('select');
-  let zoom = $state(1);
-  let selectedFrameId = $state<string | null>(null);
-  let currentFilePath = $state<string | null>(null);
-  let hasUnsavedChanges = $state(false);
-
-  const now = Math.floor(Date.now() / 1000); // Unix seconds
-  let doc = $state<Document>({
-    metadata: {
-      name: "Untitled Document",
-      author: "",
-      description: "",
-      created_at: now,
-      modified_at: now,
-      dpi: 72,
-      default_unit: "Point", // Matches Unit::Point serialization
-      default_bleed: { top: 0, bottom: 0, inside: 0, outside: 0 },
-      color_profile: "sRGB"
-    },
-    swatches: [],
-    styles: { paragraph_styles: [], character_styles: [], object_styles: [] },
-    spreads: []
+  $effect(() => {
+    if (autoSaveInterval) clearInterval(autoSaveInterval);
+    if (prefsStore.prefs.autosave_interval > 0) {
+      autoSaveInterval = setInterval(async () => {
+        if (docStore.hasUnsavedChanges) {
+          try { await invoke("save_recovery_file", { documentJson: JSON.stringify(docStore.doc) }); }
+          catch (e) { console.error("Auto-save failed", e); }
+        }
+      }, prefsStore.prefs.autosave_interval * 1000) as unknown as number;
+    }
   });
 
-  function handleKeyDown(event: KeyboardEvent) {
-    const isMac = navigator.platform.toUpperCase().indexOf("MAC") >= 0;
-    const isCtrlOrCmd = isMac ? event.metaKey : event.ctrlKey;
-    // Use toLowerCase() to handle Shift+S correctly (when shifted, key is uppercase 'S')
-    if (isCtrlOrCmd && event.key.toLowerCase() === 's') {
-      event.preventDefault();
-      if (event.shiftKey) handleSaveAs();
-      else handleSave();
+  onMount(() => {
+    const init = async () => {
+      await prefsStore.load();
+      try {
+        const recoveryJson = await invoke<string | null>("check_recovery_file");
+        if (recoveryJson && confirm("Wiederherstellung: Ein nicht gespeichertes Dokument wurde gefunden. Wiederherstellen?")) {
+          docStore.doc = JSON.parse(recoveryJson);
+          docStore.hasUnsavedChanges = true;
+        } else { await invoke("clear_recovery_file"); }
+      } catch (e) { console.error("Recovery check failed", e); }
+    };
+    init();
+
+    const handlePlaceImageRequest = () => handlePlaceImage();
+    window.addEventListener('place-image', handlePlaceImageRequest);
+
+    return () => { 
+      if (autoSaveInterval) clearInterval(autoSaveInterval); 
+      window.removeEventListener('place-image', handlePlaceImageRequest);
+    };
+  });
+
+  // --- INTERACTION HANDLERS ---
+
+  function handleFrameMouseDown(e: MouseEvent, frame: Frame) {
+    if (isLinking && linkingSourceFrameId && frame.id !== linkingSourceFrameId && frame.data.Text) {
+      docStore.pushToUndo();
+      const source = docStore.selectedFrames.find(f => f.id === linkingSourceFrameId);
+      if (source?.data.Text) {
+        source.data.Text.next_frame_id = frame.id;
+        frame.data.Text.prev_frame_id = source.id;
+        docStore.markModified();
+      }
+      isLinking = false;
+      linkingSourceFrameId = null;
+      return;
+    }
+    const layer = docStore.doc.layers.find(l => l.id === frame.layer_id);
+    if (layer?.locked || !layer?.visible || uiStore.activeTool !== 'select') return;
+    
+    e.stopPropagation();
+    if (e.detail === 2) { uiStore.isContentMode = true; uiStore.selectedFrameIds = [frame.id]; return; }
+    
+    if (e.shiftKey) {
+      if (uiStore.selectedFrameIds.includes(frame.id)) uiStore.selectedFrameIds = uiStore.selectedFrameIds.filter(id => id !== frame.id);
+      else uiStore.selectedFrameIds.push(frame.id);
+    } else if (!uiStore.selectedFrameIds.includes(frame.id)) {
+      uiStore.selectedFrameIds = [frame.id];
+      uiStore.isContentMode = false;
+    }
+
+    isDragging = true;
+    dragStart = { x: e.clientX, y: e.clientY };
+    if (uiStore.isContentMode && frame.data.Image) {
+      initial = { x: frame.data.Image.content_x, y: frame.data.Image.content_y, w: frame.data.Image.content_scale_x, h: frame.data.Image.content_scale_y };
+    } else {
+      initial = { x: frame.x, y: frame.y, w: frame.width, h: frame.height };
     }
   }
 
-  async function handleOpen() {
+  function handlePageMouseDown(e: MouseEvent, page: Page) {
+    if (uiStore.activeTool === 'select') { uiStore.selectedFrameIds = []; return; }
+    const targetLayer = docStore.doc.layers.find(l => !l.locked && l.visible);
+    if (!targetLayer) return;
+    
+    e.stopPropagation();
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const x = (e.clientX - r.left) / uiStore.zoom;
+    const y = (e.clientY - r.top) / uiStore.zoom;
+    
+    const nf: Frame = { 
+      id: crypto.randomUUID(), 
+      layer_id: targetLayer.id, 
+      x, y, width: 0, height: 0, rotation: 0, stroke_width: 0, 
+      data: uiStore.activeTool === 'text' 
+        ? { Text: { content: "", align_to_baseline_grid: false } } 
+        : { Image: { asset_path: "", content_x: 0, content_y: 0, content_scale_x: 1, content_scale_y: 1, fitting: 'Fit' } } 
+    };
+    
+    page.frames.push(nf);
+    uiStore.selectedFrameIds = [nf.id];
+    currentCreating = nf;
+    isCreating = true;
+    dragStart = { x: e.clientX, y: e.clientY };
+  }
+
+  async function handleMouseMove(e: MouseEvent) {
+    const dx = (e.clientX - dragStart.x) / uiStore.zoom;
+    const dy = (e.clientY - dragStart.y) / uiStore.zoom;
+    
+    if (isDragging && docStore.selectedFrames[0] && docStore.activePage) {
+      const frame = docStore.selectedFrames[0];
+      if (uiStore.isContentMode && frame.data.Image) {
+        frame.data.Image.content_x = initial.x + dx;
+        frame.data.Image.content_y = initial.y + dy;
+      } else {
+        let nx = initial.x + dx;
+        let ny = initial.y + dy;
+        uiStore.snapX = uiStore.snapY = null;
+        
+        if (!e.altKey) {
+          const { buildSnapTargets, findSnap } = await import("./lib/utils/geometry");
+          const targets = buildSnapTargets(docStore.activePage, uiStore.selectedFrameIds, docStore.doc.baseline_grid);
+          const snap = await findSnap(nx, ny, frame.width, frame.height, targets, 5 / uiStore.zoom);
+          
+          if (snap.x) {
+            nx = snap.x.position;
+            const target = snap.x.target as any;
+            uiStore.snapX = target.Margin?.position ?? target.Column?.position ?? target.Guide?.position ?? target.Object?.position ?? null;
+          }
+          if (snap.y) {
+            ny = snap.y.position;
+            const target = snap.y.target as any;
+            uiStore.snapY = target.Margin?.position ?? target.Guide?.position ?? target.Object?.position ?? target.Baseline?.position ?? null;
+          }
+        }
+        frame.x = nx; frame.y = ny;
+      }
+      docStore.markModified();
+    }
+    else if (isResizing && docStore.selectedFrames[0]) {
+      const frame = docStore.selectedFrames[0];
+      if (uiStore.isContentMode && frame.data.Image) {
+        const img = frame.data.Image;
+        if (resizeHandleIdx.includes('e')) img.content_scale_x = Math.max(0.1, initial.w + dx / 100);
+        if (resizeHandleIdx.includes('s')) img.content_scale_y = Math.max(0.1, initial.h + dy / 100);
+      } else {
+        if (resizeHandleIdx.includes('e')) frame.width = Math.max(10, initial.w + dx);
+        if (resizeHandleIdx.includes('s')) frame.height = Math.max(10, initial.h + dy);
+        if (resizeHandleIdx.includes('w')) { const nw = Math.max(10, initial.w - dx); frame.x = initial.x + (initial.w - nw); frame.width = nw; }
+        if (resizeHandleIdx.includes('n')) { const nh = Math.max(10, initial.h - dy); frame.y = initial.y + (initial.h - nh); frame.height = nh; }
+      }
+      docStore.markModified();
+    }
+    else if (isCreating && currentCreating) {
+      currentCreating.width = Math.max(0, dx);
+      currentCreating.height = Math.max(0, dy);
+      docStore.markModified();
+    }
+    else if (isDraggingGuide && currentDraggingGuide) {
+      const r = document.querySelector('.workspace')?.getBoundingClientRect();
+      if (r) {
+        const x = (e.clientX - r.left) / uiStore.zoom;
+        const y = (e.clientY - r.top) / uiStore.zoom;
+        if (currentDraggingGuide.guide.orientation === 'Horizontal') currentDraggingGuide.guide.position = y;
+        else currentDraggingGuide.guide.position = x;
+        docStore.markModified();
+      }
+    }
+  }
+
+  function handleMouseUp() {
+    if (isCreating && currentCreating && (currentCreating.width < 5 || currentCreating.height < 5)) {
+      for (const s of docStore.doc.spreads) for (const p of s.pages) p.frames = p.frames.filter(f => f.id !== currentCreating!.id);
+      uiStore.selectedFrameIds = [];
+    }
+    isDragging = isResizing = isCreating = isDraggingGuide = false;
+    uiStore.snapX = uiStore.snapY = null;
+    currentCreating = null;
+    currentDraggingGuide = null;
+  }
+
+  function handleKeyDown(e: KeyboardEvent) {
+    const k = e.key.toLowerCase();
+    const cmd = navigator.platform.includes("MAC") ? e.metaKey : e.ctrlKey;
+    
+    if (cmd && k === 's') { e.preventDefault(); docStore.save(); }
+    else if (cmd && k === 'n') { e.preventDefault(); uiStore.showNewDocModal = true; }
+    else if (cmd && k === ',') { e.preventDefault(); uiStore.showPrefsModal = true; }
+    else if (cmd && (k === 'f' || k === 'h')) { e.preventDefault(); uiStore.showFindBar = true; if (k === 'h') uiStore.showReplaceFields = true; }
+    else if (cmd && k === 'z') { e.preventDefault(); if (e.shiftKey) docStore.redo(); else docStore.undo(); }
+    else if (cmd && k === 'y') { e.preventDefault(); docStore.redo(); }
+    else if (e.key === 'Escape') { 
+      if (uiStore.showFindBar) { uiStore.showFindBar = false; uiStore.showReplaceFields = false; }
+      else if (uiStore.isContentMode) uiStore.isContentMode = false;
+      else if (uiStore.showPrefsModal) uiStore.showPrefsModal = false;
+      else uiStore.selectedFrameIds = [];
+    }
+    else if ((e.key === 'Delete' || e.key === 'Backspace') && uiStore.selectedFrameIds.length > 0 && !['INPUT','TEXTAREA'].includes(document.activeElement?.tagName || '')) {
+      docStore.pushToUndo();
+      for (const s of docStore.doc.spreads) for (const p of s.pages) p.frames = p.frames.filter(f => !uiStore.selectedFrameIds.includes(f.id));
+      uiStore.selectedFrameIds = [];
+      docStore.markModified();
+    }
+  }
+
+  async function handlePlaceImage() {
+    if (uiStore.selectedFrameIds.length !== 1 || !docStore.selectedFrames[0]?.data.Image) return;
     try {
       const path = await invoke<string>("open_file");
-      const content = await invoke<string>("read_document", { filePath: path });
-      doc = JSON.parse(content);
-      currentFilePath = path;
-      hasUnsavedChanges = false;
-    } catch (e) {
-      // Proper error handling: handle both Error objects and string rejections
-      const msg = e instanceof Error ? e.message : String(e);
-      alert("Failed to open file: " + msg);
-    }
-  }
-
-  async function handleSave() {
-    try {
-      if (!currentFilePath) {
-        await handleSaveAs();
-        return;
+      if (path) {
+        docStore.selectedFrames[0].data.Image.asset_path = path;
+        docStore.markModified();
       }
-      doc.metadata.modified_at = Math.floor(Date.now() / 1000); // Unix seconds
-      const documentJson = JSON.stringify(doc, null, 2);
-      await invoke<string>("save_document", { filePath: currentFilePath, documentJson });
-      hasUnsavedChanges = false;
-    } catch (e) {
-      // Proper error handling: handle both Error objects and string rejections
-      const msg = e instanceof Error ? e.message : String(e);
-      alert("Failed to save file: " + msg);
-    }
+    } catch (e) { console.error(e); }
   }
-
-  async function handleSaveAs() {
-    try {
-      doc.metadata.modified_at = Math.floor(Date.now() / 1000); // Unix seconds
-      const documentJson = JSON.stringify(doc, null, 2);
-      const path = await invoke<string>("save_as_file", { documentJson });
-      currentFilePath = path;
-      hasUnsavedChanges = false;
-    } catch (e) {
-      // Proper error handling: handle both Error objects and string rejections
-      const msg = e instanceof Error ? e.message : String(e);
-      alert("Failed to save file: " + msg);
-    }
-  }
-
-  function markDocumentAsChanged() {
-    hasUnsavedChanges = true;
-  }
-
-  let titleText = $derived(`${doc.metadata.name}${hasUnsavedChanges ? " •" : ""}`);
-
-  let selectedFrame = $derived.by((): Frame | null => {
-    for (const spread of doc.spreads) {
-      for (const page of spread.pages) {
-        for (const frame of page.frames) {
-          if (frame.id === selectedFrameId) return frame;
-        }
-      }
-    }
-    return null;
-  });
 </script>
 
-<svelte:window on:keydown={handleKeyDown} />
+<svelte:window on:keydown={handleKeyDown} on:mousemove={handleMouseMove} on:mouseup={handleMouseUp} />
 
-<main>
-  <nav class="menu-bar">
-    <div class="logo">PUBLISHER</div>
-    <div class="menu-items">
-      <div class="menu-dropdown">
-        <span>Datei</span>
-        <div class="dropdown-content">
-          <button onclick={handleOpen}>Öffnen...</button>
-          <button onclick={handleSave}>Speichern</button>
-          <button onclick={handleSaveAs}>Speichern unter...</button>
-        </div>
-      </div>
-      <span>Bearbeiten</span>
-      <span>Layout</span>
-      <span>Objekt</span>
-      <span>Ansicht</span>
-    </div>
-    <div class="doc-title">{titleText}</div>
-  </nav>
-
-  <aside class="toolbar">
-    <button class:active={activeTool === 'select'} onclick={() => activeTool = 'select'} title="Auswahl (V)">
-      <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M7,2L19,12L13,13.5L16,19L14.5,20L11.5,14.5L7,18V2Z" /></svg>
-    </button>
-    <button class:active={activeTool === 'text'} onclick={() => activeTool = 'text'} title="Text (T)">
-      <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M13,12H20V13.5H13V12M13,9.5H20V11H13V9.5M13,14.5H20V16H13V14.5M21,2H3A2,2 0 0,0 1,4V20A2,2 0 0,0 3,22H21A2,2 0 0,0 23,20V4A2,2 0 0,0 21,2M21,20H3V4H21V20M8,8H6V11H3V13H6V16H8V13H11V11H8V8Z" /></svg>
-    </button>
-  </aside>
-
+<main class:theme-light={prefsStore.prefs.theme === 'light'}>
+  <MenuBar />
+  <Toolbar />
   <div class="content-area">
-    <aside class="sidebar-left">
-      <div class="panel-header">Seiten</div>
-      <div class="pages-list">
-        {#each doc.spreads as spread, i}
-          <div class="page-thumb">
-            <div class="thumb-box"></div>
-            <span>Seite {i + 1}</span>
-          </div>
-        {/each}
-      </div>
-    </aside>
-
-    <div class="workspace-container" onclick={() => selectedFrameId = null} role="presentation">
-      <canvas id="renderer-canvas"></canvas>
-      <div class="workspace" style="--zoom: {zoom}">
-        {#each doc.spreads as spread}
-          <div class="spread">
-            {#each spread.pages as page}
-              <div class="page" style="width: {page.width}px; height: {page.height}px;">
-                {#each page.frames as frame}
-                  {#if frame.Text}
-                    <!-- svelte-ignore a11y-click-events-have-key-events -->
-                    <!-- svelte-ignore a11y-no-static-element-interactions -->
-                    <div
-                      class="frame text-frame"
-                      class:selected={selectedFrameId === frame.id}
-                      onclick={(e) => { e.stopPropagation(); selectedFrameId = frame.id; }}
-                      style="left: {frame.Text.x}px; top: {frame.Text.y}px; width: {frame.Text.width}px; height: {frame.Text.height}px;"
-                    >
-                      {frame.Text.content}
-                    </div>
-                  {/if}
-                {/each}
-              </div>
-            {/each}
-          </div>
-        {/each}
-      </div>
-    </div>
-
-    <aside class="sidebar-right">
-      <div class="panel-header">Eigenschaften</div>
-      {#if selectedFrame && selectedFrame.Text}
-        <div class="properties">
-          <label>
-            Inhalt
-            <textarea bind:value={selectedFrame.Text.content} onchange={markDocumentAsChanged}></textarea>
-          </label>
-          <div class="prop-group">
-            <label>X <input type="number" bind:value={selectedFrame.Text.x} onchange={markDocumentAsChanged} /></label>
-            <label>Y <input type="number" bind:value={selectedFrame.Text.y} onchange={markDocumentAsChanged} /></label>
-          </div>
-          <div class="prop-group">
-            <label>W <input type="number" bind:value={selectedFrame.Text.width} onchange={markDocumentAsChanged} /></label>
-            <label>H <input type="number" bind:value={selectedFrame.Text.height} onchange={markDocumentAsChanged} /></label>
-          </div>
-        </div>
-      {:else}
-        <div class="empty-state">Kein Objekt ausgewählt</div>
-      {/if}
-
-      <div class="panel-header" style="margin-top: 20px;">Ansicht</div>
-      <div class="properties">
-        <label>
-          Zoom
-          <input type="range" min="0.1" max="2" step="0.1" bind:value={zoom} />
-        </label>
-      </div>
-    </aside>
+    <SidebarLeft />
+    <Workspace 
+      onPageMouseDown={handlePageMouseDown}
+      onFrameMouseDown={handleFrameMouseDown}
+      onPortMouseDown={(e: MouseEvent, id: string) => { e.stopPropagation(); isLinking = true; linkingSourceFrameId = id; }}
+      onRulerMouseDown={(e: MouseEvent, o: 'Horizontal' | 'Vertical') => { e.stopPropagation(); docStore.pushToUndo(); const g: Guide = { position: 0, orientation: o, locked: false, color: null }; if (docStore.activePage) { docStore.activePage.guides.push(g); isDraggingGuide = true; currentDraggingGuide = { page: docStore.activePage, guide: g }; docStore.markModified(); } }}
+      onGuideMouseDown={(e: MouseEvent, page: Page, guide: Guide) => { e.stopPropagation(); isDraggingGuide = true; currentDraggingGuide = { page, guide }; }}
+      onResizeMouseDown={(e: MouseEvent, frame: Frame, h: string) => { e.stopPropagation(); isResizing = true; resizeHandleIdx = h; dragStart = {x:e.clientX, y:e.clientY}; initial = {x:frame.x, y:frame.y, w:frame.width, h:frame.height}; }}
+      onContentHandleMouseDown={(e: MouseEvent, img: ImageFrame, h: string) => { e.stopPropagation(); isResizing = true; resizeHandleIdx = h; dragStart = {x:e.clientX, y:e.clientY}; initial = {x:img.content_x, y:img.content_y, w:img.content_scale_x, h:img.content_scale_y}; }}
+    />
+    <SidebarRight 
+      onEditSwatch={(s: ColorSwatch) => { currentEditingSwatch = s; uiStore.showSwatchModal = true; }}
+      onEditParaStyle={(s: ParagraphStyle) => { currentEditingStyle = s; uiStore.showStyleEditorModal = true; }}
+      onEditCharStyle={(s: CharacterStyle) => { currentEditingCharStyle = s; uiStore.showCharStyleEditorModal = true; }}
+    />
   </div>
-
-  <footer class="status-bar">
-    <span>Bereit</span>
-    <span>A4 (595.27 x 841.89 pt)</span>
-    <span>{(zoom * 100).toFixed(0)}%</span>
-  </footer>
+  <StatusBar />
+  
+  {#if uiStore.showFindBar}
+    <FindBar />
+  {/if}
 </main>
 
-<style>
-  :global(body) {
-    margin: 0;
-    padding: 0;
-    background-color: #1e1e1e;
-    color: #ccc;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    overflow: hidden;
-  }
+<ModalManager 
+  bind:currentEditingStyle 
+  bind:currentEditingCharStyle 
+  bind:currentEditingSwatch 
+/>
 
-  main { display: flex; flex-direction: column; height: 100vh; }
-  .menu-bar { height: 32px; background: #2d2d2d; display: flex; align-items: center; padding: 0 12px; font-size: 13px; border-bottom: 1px solid #111; gap: 20px; }
-  .logo { font-weight: bold; color: #fff; letter-spacing: 1px; }
-  .menu-items { display: flex; gap: 15px; }
-  .menu-dropdown { position: relative; cursor: pointer; }
-  .dropdown-content { display: none; position: absolute; top: 100%; left: 0; background: #2d2d2d; border: 1px solid #111; min-width: 200px; z-index: 100; }
-  .menu-dropdown:hover .dropdown-content { display: block; }
-  .dropdown-content button { width: 100%; background: transparent; border: none; color: #ccc; padding: 8px 12px; text-align: left; cursor: pointer; font-size: 13px; }
-  .dropdown-content button:hover { background: #007acc; color: white; }
-  .doc-title { margin-left: auto; color: #888; }
-  .toolbar { position: absolute; left: 0; top: 32px; bottom: 25px; width: 40px; background: #2d2d2d; border-right: 1px solid #111; display: flex; flex-direction: column; align-items: center; padding-top: 10px; gap: 5px; z-index: 10; }
-  .toolbar button { width: 30px; height: 30px; background: transparent; border: none; color: #ccc; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
-  .toolbar button.active { background: #007acc; color: white; }
+<style>
+  :global(body) { margin: 0; padding: 0; background-color: #1e1e1e; color: #ccc; font-family: sans-serif; overflow: hidden; }
+  main { display: flex; flex-direction: column; height: 100vh; position: relative; }
+  main.theme-light { background-color: #f0f0f0; color: #333; }
   .content-area { flex: 1; display: flex; margin-left: 40px; overflow: hidden; }
-  .sidebar-left, .sidebar-right { width: 240px; background: #252526; display: flex; flex-direction: column; border-right: 1px solid #111; }
-  .sidebar-right { border-left: 1px solid #111; border-right: none; }
-  .panel-header { background: #333; padding: 6px 12px; font-size: 11px; text-transform: uppercase; font-weight: bold; color: #aaa; }
-  .workspace-container { flex: 1; overflow: auto; background: #181818; position: relative; padding: 100px; }
-  #renderer-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: none; }
-  .workspace { display: flex; flex-direction: column; align-items: center; gap: 50px; }
-  .spread { display: flex; gap: 2px; background: #000; padding: 2px; box-shadow: 0 20px 50px rgba(0,0,0,0.6); transform: scale(var(--zoom)); transform-origin: top center; transition: transform 0.1s ease-out; }
-  .page { background: white; position: relative; color: black; }
-  .frame { position: absolute; cursor: default; user-select: none; }
-  .text-frame { border: 1px solid transparent; padding: 4px; font-size: 14px; line-height: 1.4; overflow: hidden; }
-  .text-frame.selected { border: 1px solid #007acc; box-shadow: 0 0 0 1px #007acc; }
-  .properties { padding: 15px; display: flex; flex-direction: column; gap: 15px; }
-  .properties label { display: flex; flex-direction: column; gap: 5px; font-size: 12px; }
-  .properties input, .properties textarea { background: #3c3c3c; border: 1px solid #555; color: white; padding: 4px 8px; border-radius: 2px; }
-  .properties textarea { height: 80px; resize: none; }
-  .prop-group { display: flex; gap: 10px; }
-  .prop-group label { flex: 1; }
-  .page-thumb { padding: 15px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
-  .thumb-box { width: 60px; height: 80px; background: #444; border: 1px solid #555; }
-  .empty-state { padding: 40px; text-align: center; color: #666; font-style: italic; font-size: 13px; }
-  .status-bar { height: 25px; background: #007acc; color: white; display: flex; align-items: center; padding: 0 10px; font-size: 12px; gap: 20px; }
 </style>

@@ -1,98 +1,43 @@
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
-use publisher_core::{Frame, ImageFrame, Margins, Page, Pt, ShapeFrame, ShapeType, TextFrame};
+use publisher_core::{
+    Frame, FrameData, ImageFrame, Margins, Page, Pt, ShapeFrame, ShapeType, TextFrame,
+};
 
 fn bench_frame_creation(c: &mut Criterion) {
     let mut group = c.benchmark_group("frame_creation");
     group.sample_size(1000);
 
     group.bench_function("text_frame_creation", |b| {
-        b.iter(|| {
-            black_box(TextFrame::new(
-                black_box(Pt(10.0)),
-                black_box(Pt(20.0)),
-                black_box(Pt(200.0)),
-                black_box(Pt(100.0)),
-                black_box("Hello World"),
-            ))
-        })
+        b.iter(|| black_box(TextFrame::new(black_box("Hello World"))))
     });
 
     group.bench_function("image_frame_creation", |b| {
-        b.iter(|| {
-            black_box(ImageFrame::new(
-                black_box(Pt(10.0)),
-                black_box(Pt(20.0)),
-                black_box(Pt(300.0)),
-                black_box(Pt(150.0)),
-                black_box("/path/to/image.jpg"),
-            ))
-        })
+        b.iter(|| black_box(ImageFrame::new(black_box("/path/to/image.jpg"))))
     });
 
     group.bench_function("shape_frame_rectangle", |b| {
-        b.iter(|| {
-            black_box(ShapeFrame::new(
-                black_box(Pt(0.0)),
-                black_box(Pt(0.0)),
-                black_box(Pt(100.0)),
-                black_box(Pt(100.0)),
-                black_box(ShapeType::Rectangle),
-            ))
-        })
-    });
-
-    group.bench_function("shape_frame_ellipse", |b| {
-        b.iter(|| {
-            black_box(ShapeFrame::new(
-                black_box(Pt(0.0)),
-                black_box(Pt(0.0)),
-                black_box(Pt(75.0)),
-                black_box(Pt(50.0)),
-                black_box(ShapeType::Ellipse),
-            ))
-        })
+        b.iter(|| black_box(ShapeFrame::new(black_box(ShapeType::Rectangle))))
     });
 
     group.finish();
 }
 
-fn bench_frame_enum_creation(c: &mut Criterion) {
-    let mut group = c.benchmark_group("frame_enum_variants");
+fn bench_frame_full_creation(c: &mut Criterion) {
+    let mut group = c.benchmark_group("frame_full_creation");
     group.sample_size(1000);
 
-    group.bench_function("frame_text_variant", |b| {
+    group.bench_function("frame_text_full", |b| {
         b.iter(|| {
-            black_box(Frame::Text(TextFrame::new(
-                black_box(Pt(10.0)),
-                black_box(Pt(20.0)),
-                black_box(Pt(200.0)),
-                black_box(Pt(100.0)),
-                black_box("Content"),
-            )))
-        })
-    });
-
-    group.bench_function("frame_image_variant", |b| {
-        b.iter(|| {
-            black_box(Frame::Image(ImageFrame::new(
-                black_box(Pt(10.0)),
-                black_box(Pt(20.0)),
-                black_box(Pt(300.0)),
-                black_box(Pt(150.0)),
-                black_box("/img.jpg"),
-            )))
-        })
-    });
-
-    group.bench_function("frame_shape_variant", |b| {
-        b.iter(|| {
-            black_box(Frame::Shape(ShapeFrame::new(
-                black_box(Pt(0.0)),
-                black_box(Pt(0.0)),
-                black_box(Pt(100.0)),
-                black_box(Pt(100.0)),
-                black_box(ShapeType::Rectangle),
-            )))
+            let data = FrameData::Text(TextFrame::new("Content"));
+            black_box(Frame::new(
+                "f1",
+                "l1",
+                Pt(10.0),
+                Pt(20.0),
+                Pt(200.0),
+                Pt(100.0),
+                data,
+            ))
         })
     });
 
@@ -114,7 +59,12 @@ fn bench_page_frame_operations(c: &mut Criterion) {
                     inside: Pt(36.0),
                     outside: Pt(36.0),
                 },
+                bleed: None,
+                column_count: 2,
+                gutter_width: Pt(12.0),
+                guides: vec![],
                 frames: Vec::new(),
+                applied_parent_id: None,
             })
         })
     });
@@ -134,16 +84,24 @@ fn bench_page_frame_operations(c: &mut Criterion) {
                             inside: Pt(36.0),
                             outside: Pt(36.0),
                         },
+                        bleed: None,
+                        column_count: 2,
+                        gutter_width: Pt(12.0),
+                        guides: vec![],
                         frames: Vec::with_capacity(count),
+                        applied_parent_id: None,
                     };
                     for i in 0..count {
-                        let frame = Frame::Text(TextFrame::new(
+                        let data = FrameData::Text(TextFrame::new("Frame text"));
+                        let frame = Frame::new(
+                            &format!("f{}", i),
+                            "l1",
                             Pt(10.0 + (i as f64 * 50.0)),
                             Pt(20.0),
                             Pt(100.0),
                             Pt(50.0),
-                            "Frame text",
-                        ));
+                            data,
+                        );
                         page.frames.push(black_box(frame));
                     }
                     black_box(page)
@@ -159,37 +117,11 @@ fn bench_frame_cloning(c: &mut Criterion) {
     let mut group = c.benchmark_group("frame_cloning");
     group.sample_size(500);
 
-    let text_frame = Frame::Text(TextFrame::new(
-        Pt(10.0),
-        Pt(20.0),
-        Pt(200.0),
-        Pt(100.0),
-        "Hello World",
-    ));
+    let data = FrameData::Text(TextFrame::new("Hello World"));
+    let text_frame = Frame::new("f1", "l1", Pt(10.0), Pt(20.0), Pt(200.0), Pt(100.0), data);
+
     group.bench_function("clone_text_frame", |b| {
         b.iter(|| black_box(black_box(&text_frame).clone()))
-    });
-
-    let image_frame = Frame::Image(ImageFrame::new(
-        Pt(10.0),
-        Pt(20.0),
-        Pt(300.0),
-        Pt(150.0),
-        "/path/image.jpg",
-    ));
-    group.bench_function("clone_image_frame", |b| {
-        b.iter(|| black_box(black_box(&image_frame).clone()))
-    });
-
-    let shape_frame = Frame::Shape(ShapeFrame::new(
-        Pt(0.0),
-        Pt(0.0),
-        Pt(100.0),
-        Pt(100.0),
-        ShapeType::Rectangle,
-    ));
-    group.bench_function("clone_shape_frame", |b| {
-        b.iter(|| black_box(black_box(&shape_frame).clone()))
     });
 
     group.finish();
@@ -198,7 +130,7 @@ fn bench_frame_cloning(c: &mut Criterion) {
 criterion_group!(
     benches,
     bench_frame_creation,
-    bench_frame_enum_creation,
+    bench_frame_full_creation,
     bench_page_frame_operations,
     bench_frame_cloning
 );

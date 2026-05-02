@@ -6,3 +6,5 @@ license.workspace = true
 
 [dependencies]
 publisher-core = { path = "../core" }
+lcms2 = "6.0"
+serde = { workspace = true }

@@ -1,6 +1,6 @@
 use publisher_core::builder::DocumentBuilder;
 use publisher_core::paper::PaperFormat;
-use publisher_core::{Frame, Pt, TextFrame};
+use publisher_core::{Frame, FrameData, Pt, TextFrame};
 
 fn main() {
     println!("--- Publisher Prototype ---");
@@ -16,14 +16,16 @@ fn main() {
     // Add some content to the first page
     if let Some(spread) = doc.spreads.get_mut(0) {
         if let Some(page) = spread.pages.get_mut(0) {
-            let text_frame = TextFrame::new(
+            let layer_id = doc.layers[0].id.clone();
+            page.frames.push(Frame::new(
+                "frame-1",
+                &layer_id,
                 Pt(50.0),
                 Pt(50.0),
                 Pt(400.0),
                 Pt(100.0),
-                "Welcome to the Publisher Prototype!",
-            );
-            page.frames.push(Frame::Text(text_frame));
+                FrameData::Text(TextFrame::new("Welcome to the Publisher Prototype!")),
+            ));
         }
     }
 
