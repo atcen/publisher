@@ -179,7 +179,7 @@ jobs:
           echo "LCMS2_SYS_STATIC=1" >> $GITHUB_ENV
 
       - name: Build Desktop App Bundles
-        uses: tauri-apps/tauri-action@v2
+        uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
