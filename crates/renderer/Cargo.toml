@@ -7,5 +7,7 @@ license.workspace = true
 
 [dependencies]
 publisher-core = { path = "../core" }
+publisher-typography = { path = "../typography" }
+publisher-color = { path = "../color" }
 vello = { workspace = true }
 wgpu = { workspace = true }

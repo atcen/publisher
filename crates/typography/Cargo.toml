@@ -6,3 +6,7 @@ license.workspace = true
 
 [dependencies]
 publisher-core = { path = "../core" }
+harfbuzz-rs = "2.0"
+freetype-rs = "0.35"
+parley = "0.1"
+serde = { workspace = true }

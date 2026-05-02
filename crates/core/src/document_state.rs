@@ -74,10 +74,14 @@ mod tests {
                     outside: crate::Pt(0.0),
                 },
                 color_profile: "sRGB".to_string(),
+                facing_pages: true,
             },
+            fonts: vec![],
+            icc_profiles: vec![],
             swatches: vec![],
             styles: Styles::default(),
             spreads: vec![],
+            layers: vec![crate::Layer::new("l1", "Layer 1")],
         }
     }
 

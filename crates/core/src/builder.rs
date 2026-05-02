@@ -14,6 +14,8 @@ pub struct DocumentBuilder {
     pages_count: u32,
     margins: Margins,
     bleed: Bleed,
+    column_count: u32,
+    gutter_width: crate::Pt,
     color_profile: String,
 }
 
@@ -46,6 +48,8 @@ impl DocumentBuilder {
                 inside: crate::Pt(0.0),
                 outside: crate::Pt(0.0),
             },
+            column_count: 1,
+            gutter_width: crate::Pt(12.0),
             color_profile: "sRGB".to_string(),
         }
     }
@@ -70,6 +74,16 @@ impl DocumentBuilder {
         self
     }
 
+    pub fn with_columns(mut self, count: u32) -> Self {
+        self.column_count = count.max(1);
+        self
+    }
+
+    pub fn with_gutter(mut self, width: crate::Pt) -> Self {
+        self.gutter_width = width;
+        self
+    }
+
     pub fn build(self) -> Document {
         if self.pages_count == 0 {
             // Should not happen with current with_pages, but for safety:
@@ -88,31 +102,18 @@ impl DocumentBuilder {
         };
 
         let mut spreads = Vec::new();
-        let mut current_pages = Vec::new();
-
-        for i in 0..self.pages_count {
-            let page = Page {
-                width,
-                height,
-                margins: self.margins.clone(),
-                frames: Vec::new(),
-            };
-
-            if self.facing_pages {
-                if i == 0 {
-                    spreads.push(Spread { pages: vec![page] });
-                } else {
-                    current_pages.push(page);
-                    if current_pages.len() == 2 || i == self.pages_count - 1 {
-                        spreads.push(Spread {
-                            pages: current_pages,
-                        });
-                        current_pages = Vec::new();
-                    }
-                }
-            } else {
-                spreads.push(Spread { pages: vec![page] });
-            }
+        for _ in 0..self.pages_count {
+            spreads.push(Spread {
+                pages: vec![Page {
+                    width,
+                    height,
+                    margins: self.margins.clone(),
+                    bleed: None,
+                    column_count: self.column_count,
+                    gutter_width: self.gutter_width,
+                    frames: Vec::new(),
+                }],
+            });
         }
 
         let swatches = vec![
@@ -126,7 +127,9 @@ impl DocumentBuilder {
             },
         ];
 
-        Document {
+        let layers = vec![crate::Layer::new("layer-1", "Layer 1")];
+
+        let mut doc = Document {
             metadata: Metadata {
                 name: self.name,
                 author: self.author,
@@ -137,11 +140,18 @@ impl DocumentBuilder {
                 default_unit: self.unit,
                 default_bleed: self.bleed,
                 color_profile: self.color_profile,
+                facing_pages: self.facing_pages,
             },
+            fonts: vec![],
+            icc_profiles: vec![],
             swatches,
             styles: Styles::default(),
             spreads,
-        }
+            layers,
+        };
+
+        doc.reorganize_spreads();
+        doc
     }
 }
 
@@ -170,5 +180,17 @@ mod tests {
         let doc = DocumentBuilder::new().with_pages(0).build();
         assert_eq!(doc.spreads.len(), 1);
         assert_eq!(doc.spreads[0].pages.len(), 1);
+    }
+
+    #[test]
+    fn test_builder_columns() {
+        let doc = DocumentBuilder::new()
+            .with_columns(3)
+            .with_gutter(crate::Pt(10.0))
+            .build();
+        
+        let page = &doc.spreads[0].pages[0];
+        assert_eq!(page.column_count, 3);
+        assert_eq!(page.gutter_width, crate::Pt(10.0));
     }
 }

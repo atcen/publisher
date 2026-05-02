@@ -86,7 +86,7 @@ pub fn deserialize_document(data: &[u8]) -> Result<Document, PersistenceError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Bleed, Margins, Metadata, Pt, Spread, Unit};
+    use crate::{Bleed, Margins, Metadata, Pt, Spread, Unit, Styles};
 
     fn create_test_document() -> Document {
         Document {
@@ -105,9 +105,12 @@ mod tests {
                     outside: Pt(5.0),
                 },
                 color_profile: "sRGB".to_string(),
+                facing_pages: true,
             },
+            fonts: vec![],
+            icc_profiles: vec![],
             swatches: vec![],
-            styles: Default::default(),
+            styles: Styles::default(),
             spreads: vec![Spread {
                 pages: vec![crate::Page {
                     width: Pt(595.0),
@@ -118,9 +121,13 @@ mod tests {
                         inside: Pt(36.0),
                         outside: Pt(36.0),
                     },
+                    bleed: None,
+                    column_count: 2,
+                    gutter_width: Pt(12.0),
                     frames: vec![],
                 }],
             }],
+            layers: vec![crate::Layer::new("l1", "Layer 1")],
         }
     }
 
@@ -152,6 +159,7 @@ mod tests {
         assert_eq!(original.metadata.name, deserialized.metadata.name);
         assert_eq!(original.metadata.author, deserialized.metadata.author);
         assert_eq!(original.spreads.len(), deserialized.spreads.len());
+        assert_eq!(original.layers.len(), deserialized.layers.len());
     }
 
     #[test]
@@ -187,15 +195,19 @@ mod tests {
                     "dpi": 300,
                     "default_unit": "Millimeter",
                     "default_bleed": {"top": 0.0, "bottom": 0.0, "inside": 0.0, "outside": 0.0},
-                    "color_profile": "sRGB"
+                    "color_profile": "sRGB",
+                    "facing_pages": true
                 },
+                "fonts": [],
+                "icc_profiles": [],
                 "swatches": [],
                 "styles": {
                     "paragraph_styles": [],
                     "character_styles": [],
                     "object_styles": []
                 },
-                "spreads": []
+                "spreads": [],
+                "layers": []
             }
         }"#;
         let result = deserialize_document(future_version.as_bytes());

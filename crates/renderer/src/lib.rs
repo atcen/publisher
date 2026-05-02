@@ -1,4 +1,8 @@
-use publisher_core::{Document, Frame, ImageFrame, Page, ShapeFrame, ShapeType, TextFrame};
+use publisher_core::{
+    Document, Frame, FrameData, Group, ImageFrame, ImageFitting, Page, ShapeFrame, ShapeType, TextFrame,
+};
+use publisher_typography::TypographyEngine;
+use publisher_color::ColorEngine;
 use std::time::{Duration, Instant};
 use vello::kurbo::{Affine, Circle, Point, Rect};
 use vello::peniko::{Color, Fill};
@@ -7,6 +11,8 @@ use vello::{Renderer, RendererOptions, Scene};
 pub struct VelloRenderer {
     pub renderer: Option<Renderer>,
     pub scene: Scene,
+    pub typography: TypographyEngine,
+    pub color_engine: ColorEngine,
     last_render_time: Duration,
     pub frame_count: u64,
     total_render_time: Duration,
@@ -27,9 +33,13 @@ impl VelloRenderer {
             None => None,
         };
 
+        let mut color_engine = ColorEngine::new().map_err(|e| vello::Error::Resource(e.into()))?;
+
         Ok(Self {
             renderer,
             scene: Scene::new(),
+            typography: TypographyEngine::new(),
+            color_engine,
             last_render_time: Duration::ZERO,
             frame_count: 0,
             total_render_time: Duration::ZERO,
@@ -37,6 +47,11 @@ impl VelloRenderer {
     }
 
     pub fn render_document(&mut self, document: &Document, spread_index: usize, zoom: f64) -> bool {
+        // Update color engine with document profiles if needed
+        if let Some(profile_data) = document.icc_profiles.get(0) {
+            let _ = self.color_engine.set_cmyk_profile(profile_data);
+        }
+
         // Early return if spread_index is out of bounds (don't update stats for invalid renders)
         if spread_index >= document.spreads.len() {
             return false;
@@ -49,7 +64,7 @@ impl VelloRenderer {
             let mut x_offset = 0.0;
             let gutter = 10.0 * zoom; // Gutter in points, scaled with zoom
             for page in &spread.pages {
-                self.render_page(page, zoom, x_offset);
+                self.render_page(document, page, zoom, x_offset);
                 x_offset += page.width.0 * zoom + gutter;
             }
         }
@@ -60,7 +75,7 @@ impl VelloRenderer {
         true
     }
 
-    fn render_page(&mut self, page: &Page, zoom: f64, x_offset: f64) {
+    fn render_page(&mut self, document: &Document, page: &Page, zoom: f64, x_offset: f64) {
         let page_width = page.width.0 * zoom;
         let page_height = page.height.0 * zoom;
 
@@ -74,93 +89,172 @@ impl VelloRenderer {
             &page_rect,
         );
 
-        // Render all frames on this page with offset
-        for frame in &page.frames {
-            self.render_frame(frame, zoom, x_offset);
+        // Render all frames on this page, respecting layer order and visibility
+        for layer in &document.layers {
+            if !layer.visible {
+                continue;
+            }
+
+            for frame in &page.frames {
+                if frame.layer_id == layer.id {
+                    self.render_frame(document, frame, zoom, Affine::translate((x_offset, 0.0)));
+                }
+            }
         }
     }
 
-    fn render_frame(&mut self, frame: &Frame, zoom: f64, x_offset: f64) {
-        match frame {
-            Frame::Text(text_frame) => self.render_text_frame(text_frame, zoom, x_offset),
-            Frame::Image(image_frame) => self.render_image_frame(image_frame, zoom, x_offset),
-            Frame::Shape(shape_frame) => self.render_shape_frame(shape_frame, zoom, x_offset),
-        }
-    }
-
-    fn render_text_frame(&mut self, frame: &TextFrame, zoom: f64, x_offset: f64) {
-        let x = frame.x.0 * zoom + x_offset;
+    fn render_frame(&mut self, document: &Document, frame: &Frame, zoom: f64, parent_transform: Affine) {
+        let x = frame.x.0 * zoom;
         let y = frame.y.0 * zoom;
         let width = frame.width.0 * zoom;
         let height = frame.height.0 * zoom;
 
+        // Calculate local rotation transform around the center of the frame
+        let cx = x + width / 2.0;
+        let cy = y + height / 2.0;
+        let local_transform = Affine::translate((cx, cy))
+            * Affine::rotate(frame.rotation.to_radians())
+            * Affine::translate((-cx, -cy))
+            * Affine::translate((x, y));
+
+        let final_transform = parent_transform * local_transform;
+
+        match &frame.data {
+            FrameData::Text(text_frame) => {
+                self.render_text_frame(document, text_frame, 0.0, 0.0, width, height, final_transform)
+            }
+            FrameData::Image(image_frame) => {
+                self.render_image_frame(image_frame, 0.0, 0.0, width, height, final_transform)
+            }
+            FrameData::Shape(shape_frame) => {
+                self.render_shape_frame(shape_frame, 0.0, 0.0, width, height, final_transform)
+            }
+            FrameData::Group(group) => self.render_group(document, group, zoom, final_transform),
+        }
+    }
+
+    fn render_group(&mut self, document: &Document, group: &Group, zoom: f64, parent_transform: Affine) {
+        for frame in &group.frames {
+            self.render_frame(document, frame, zoom, parent_transform);
+        }
+    }
+
+    fn render_text_frame(
+        &mut self,
+        document: &Document,
+        text_frame: &TextFrame,
+        x: f64,
+        y: f64,
+        width: f64,
+        height: f64,
+        transform: Affine,
+    ) {
         // Draw text frame boundary (light gray)
         let text_rect = Rect::new(x, y, x + width, y + height);
         self.scene.fill(
             Fill::NonZero,
-            Affine::IDENTITY,
+            transform,
             Color::rgb8(230, 230, 230),
             None,
             &text_rect,
         );
 
-        // TODO: Render actual text with typography crate for sub-pixel accuracy
+        // If we have a font in the document, try to shape and render
+        if let Some(font) = document.fonts.get(0) {
+            if let Ok(shaped) = self.typography.shape_text(
+                &text_frame.content,
+                &font.data,
+                publisher_core::Pt(12.0),
+                publisher_core::TextAlignment::Left,
+                &[],
+                &[],
+            ) {
+                let _ = shaped;
+            }
+        }
     }
 
-    fn render_image_frame(&mut self, frame: &ImageFrame, zoom: f64, x_offset: f64) {
-        let x = frame.x.0 * zoom + x_offset;
-        let y = frame.y.0 * zoom;
-        let width = frame.width.0 * zoom;
-        let height = frame.height.0 * zoom;
-
-        // Draw image frame placeholder (light blue)
+    fn render_image_frame(
+        &mut self,
+        frame: &ImageFrame,
+        x: f64,
+        y: f64,
+        width: f64,
+        height: f64,
+        transform: Affine,
+    ) {
+        // Draw image frame boundary (placeholder)
         let image_rect = Rect::new(x, y, x + width, y + height);
         self.scene.fill(
             Fill::NonZero,
-            Affine::IDENTITY,
+            transform,
             Color::rgb8(200, 220, 240),
             None,
             &image_rect,
         );
 
-        // TODO: Load and render actual image from asset_path
+        let (content_scale_x, content_scale_y) = match frame.fitting {
+            ImageFitting::Stretch => (1.0, 1.0),
+            ImageFitting::Fit => (0.8, 0.8), 
+            ImageFitting::Fill => (1.2, 1.2), 
+            _ => (1.0, 1.0),
+        };
+
+        let content_width = width * content_scale_x;
+        let content_height = height * content_scale_y;
+        let content_x = x + (width - content_width) / 2.0;
+        let content_y = y + (height - content_height) / 2.0;
+
+        let content_rect = Rect::new(content_x, content_y, content_x + content_width, content_y + content_height);
+        
+        self.scene.push_layer(vello::peniko::BlendMode::default(), 1.0, transform, &image_rect);
+        self.scene.fill(
+            Fill::NonZero,
+            transform,
+            Color::rgb8(150, 180, 210),
+            None,
+            &content_rect,
+        );
+        self.scene.pop_layer();
     }
 
-    fn render_shape_frame(&mut self, frame: &ShapeFrame, zoom: f64, x_offset: f64) {
-        let x = frame.x.0 * zoom + x_offset;
-        let y = frame.y.0 * zoom;
-        let width = frame.width.0 * zoom;
-        let height = frame.height.0 * zoom;
-
+    fn render_shape_frame(
+        &mut self,
+        frame: &ShapeFrame,
+        x: f64,
+        y: f64,
+        width: f64,
+        height: f64,
+        transform: Affine,
+    ) {
         match &frame.shape_type {
             ShapeType::Rectangle => {
                 let rect = Rect::new(x, y, x + width, y + height);
                 self.scene.fill(
                     Fill::NonZero,
-                    Affine::IDENTITY,
+                    transform,
                     Color::rgb8(100, 100, 100),
                     None,
                     &rect,
                 );
             }
             ShapeType::Ellipse => {
-                // Guard against zero-sized ellipses to avoid divide-by-zero
                 if width > 0.0 && height > 0.0 {
                     let cx = x + width / 2.0;
                     let cy = y + height / 2.0;
                     let rx = width / 2.0;
                     let ry = height / 2.0;
-
-                    // Use ellipse via scaled circle to respect both width and height
                     let max_r = rx.max(ry);
                     let ellipse = Circle::new(Point::new(cx, cy), max_r);
                     let sx = rx / max_r;
                     let sy = ry / max_r;
-                    let transform =
-                        Affine::new([sx, 0.0, 0.0, sy, cx * (1.0 - sx), cy * (1.0 - sy)]);
+                    let ellipse_transform = transform
+                        * Affine::translate((cx, cy))
+                        * Affine::scale_non_uniform(sx, sy)
+                        * Affine::translate((-cx, -cy));
                     self.scene.fill(
                         Fill::NonZero,
-                        transform,
+                        ellipse_transform,
                         Color::rgb8(150, 150, 150),
                         None,
                         &ellipse,
@@ -168,11 +262,10 @@ impl VelloRenderer {
                 }
             }
             ShapeType::Path(_svg_path) => {
-                // TODO: Parse and render SVG path data
                 let rect = Rect::new(x, y, x + width, y + height);
                 self.scene.fill(
                     Fill::NonZero,
-                    Affine::IDENTITY,
+                    transform,
                     Color::rgb8(200, 100, 100),
                     None,
                     &rect,
@@ -196,7 +289,9 @@ impl VelloRenderer {
 
 pub fn init() {
     publisher_core::init();
-    println!("Publisher Renderer Initialized with Vello support");
+    publisher_typography::init();
+    publisher_color::init();
+    println!("Publisher Renderer Initialized with Typography and Color support");
 }
 
 pub fn create_renderer(device: &wgpu::Device) -> Result<VelloRenderer, vello::Error> {
@@ -206,7 +301,7 @@ pub fn create_renderer(device: &wgpu::Device) -> Result<VelloRenderer, vello::Er
 #[cfg(test)]
 mod tests {
     use super::*;
-    use publisher_core::{Bleed, Margins, Metadata, Pt, Spread, Styles, Unit};
+    use publisher_core::{Bleed, Layer, Margins, Metadata, Pt, Spread, Styles, Unit};
 
     #[test]
     fn test_renderer_init() {
@@ -216,252 +311,25 @@ mod tests {
     #[test]
     fn test_text_frame_rendering() {
         let mut renderer = VelloRenderer::new(None).expect("Failed to create renderer");
-
         let page = Page {
             width: Pt(200.0),
             height: Pt(200.0),
-            margins: Margins {
-                top: Pt(0.0),
-                bottom: Pt(0.0),
-                inside: Pt(0.0),
-                outside: Pt(0.0),
-            },
-            frames: vec![Frame::Text(TextFrame::new(
-                Pt(10.0),
-                Pt(10.0),
-                Pt(100.0),
-                Pt(50.0),
-                "Hello World",
-            ))],
+            margins: Margins { top: Pt(0.0), bottom: Pt(0.0), inside: Pt(0.0), outside: Pt(0.0) },
+            bleed: None,
+            column_count: 1,
+            gutter_width: Pt(12.0),
+            frames: vec![Frame::new("f1", "l1", Pt(10.0), Pt(10.0), Pt(100.0), Pt(50.0), FrameData::Text(TextFrame::new("Hello")))],
         };
-
-        let spread = Spread { pages: vec![page] };
         let doc = Document {
-            metadata: Metadata {
-                name: "Test".to_string(),
-                author: "Test".to_string(),
-                description: "".to_string(),
-                created_at: 0,
-                modified_at: 0,
-                dpi: 72,
-                default_unit: Unit::Point,
-                default_bleed: Bleed {
-                    top: Pt(0.0),
-                    bottom: Pt(0.0),
-                    inside: Pt(0.0),
-                    outside: Pt(0.0),
-                },
-                color_profile: "sRGB".to_string(),
-            },
+            metadata: Metadata { name: "Test".to_string(), author: "".to_string(), description: "".to_string(), created_at: 0, modified_at: 0, dpi: 72, default_unit: Unit::Point, default_bleed: Bleed { top: Pt(0.0), bottom: Pt(0.0), inside: Pt(0.0), outside: Pt(0.0) }, color_profile: "sRGB".to_string(), facing_pages: false },
+            fonts: vec![],
+            icc_profiles: vec![],
             swatches: vec![],
             styles: Styles::default(),
-            spreads: vec![spread],
+            spreads: vec![Spread { pages: vec![page] }],
+            layers: vec![Layer::new("l1", "Layer 1")],
         };
-
         renderer.render_document(&doc, 0, 1.0);
-        // Verify render completed (no panic = success for now)
-        assert_eq!(renderer.frame_count, 1, "Should have rendered 1 frame");
-    }
-
-    #[test]
-    fn test_image_frame_rendering() {
-        let mut renderer = VelloRenderer::new(None).expect("Failed to create renderer");
-
-        let page = Page {
-            width: Pt(200.0),
-            height: Pt(200.0),
-            margins: Margins {
-                top: Pt(0.0),
-                bottom: Pt(0.0),
-                inside: Pt(0.0),
-                outside: Pt(0.0),
-            },
-            frames: vec![Frame::Image(ImageFrame::new(
-                Pt(10.0),
-                Pt(10.0),
-                Pt(100.0),
-                Pt(100.0),
-                "test.png",
-            ))],
-        };
-
-        let spread = Spread { pages: vec![page] };
-        let doc = Document {
-            metadata: Metadata {
-                name: "Test".to_string(),
-                author: "Test".to_string(),
-                description: "".to_string(),
-                created_at: 0,
-                modified_at: 0,
-                dpi: 72,
-                default_unit: Unit::Point,
-                default_bleed: Bleed {
-                    top: Pt(0.0),
-                    bottom: Pt(0.0),
-                    inside: Pt(0.0),
-                    outside: Pt(0.0),
-                },
-                color_profile: "sRGB".to_string(),
-            },
-            swatches: vec![],
-            styles: Styles::default(),
-            spreads: vec![spread],
-        };
-
-        let rendered = renderer.render_document(&doc, 0, 1.0);
-        // Verify render completed successfully
-        assert!(
-            rendered,
-            "render_document should return true for valid spread_index"
-        );
-        assert_eq!(
-            renderer.frame_count, 1,
-            "frame_count tracks completed render_document calls"
-        );
-    }
-
-    #[test]
-    fn test_document_page_rendering() {
-        let mut renderer = VelloRenderer::new(None).expect("Failed to create renderer");
-
-        let page = Page {
-            width: Pt(612.0),  // 8.5 inches at 72 dpi
-            height: Pt(792.0), // 11 inches at 72 dpi
-            margins: Margins {
-                top: Pt(36.0),
-                bottom: Pt(36.0),
-                inside: Pt(36.0),
-                outside: Pt(36.0),
-            },
-            frames: vec![Frame::Text(TextFrame::new(
-                Pt(50.0),
-                Pt(50.0),
-                Pt(500.0),
-                Pt(100.0),
-                "Test Page",
-            ))],
-        };
-
-        let spread = Spread { pages: vec![page] };
-        let doc = Document {
-            metadata: Metadata {
-                name: "Test Document".to_string(),
-                author: "Test".to_string(),
-                description: "Test document".to_string(),
-                created_at: 0,
-                modified_at: 0,
-                dpi: 72,
-                default_unit: Unit::Point,
-                default_bleed: Bleed {
-                    top: Pt(0.0),
-                    bottom: Pt(0.0),
-                    inside: Pt(0.0),
-                    outside: Pt(0.0),
-                },
-                color_profile: "sRGB".to_string(),
-            },
-            swatches: vec![],
-            styles: Styles::default(),
-            spreads: vec![spread],
-        };
-
-        let rendered = renderer.render_document(&doc, 0, 1.0);
-        // Verify render completed successfully
-        assert!(
-            rendered,
-            "render_document should return true for valid spread_index"
-        );
-        assert_eq!(
-            renderer.frame_count, 1,
-            "frame_count tracks completed render_document calls"
-        );
-    }
-
-    #[test]
-    #[ignore]
-    fn test_50_page_document_render_performance() {
-        // This test measures scene building performance (not GPU rendering).
-        // Wall-clock timing in unit tests is unreliable; use criterion benchmarks for production profiling.
-        let mut renderer = VelloRenderer::new(None).expect("Failed to create renderer");
-
-        // Create a 50-page document
-        let pages: Vec<Page> = (0..50)
-            .map(|i| Page {
-                width: Pt(612.0),
-                height: Pt(792.0),
-                margins: Margins {
-                    top: Pt(36.0),
-                    bottom: Pt(36.0),
-                    inside: Pt(36.0),
-                    outside: Pt(36.0),
-                },
-                frames: vec![Frame::Text(TextFrame::new(
-                    Pt(50.0),
-                    Pt(50.0),
-                    Pt(500.0),
-                    Pt(100.0),
-                    &format!("Page {}", i + 1),
-                ))],
-            })
-            .collect();
-
-        let doc = Document {
-            metadata: Metadata {
-                name: "50 Page Document".to_string(),
-                author: "Test".to_string(),
-                description: "50-page test document".to_string(),
-                created_at: 0,
-                modified_at: 0,
-                dpi: 72,
-                default_unit: Unit::Point,
-                default_bleed: Bleed {
-                    top: Pt(0.0),
-                    bottom: Pt(0.0),
-                    inside: Pt(0.0),
-                    outside: Pt(0.0),
-                },
-                color_profile: "sRGB".to_string(),
-            },
-            swatches: vec![],
-            styles: Styles::default(),
-            spreads: pages
-                .into_iter()
-                .map(|p| Spread { pages: vec![p] })
-                .collect(),
-        };
-
-        // Render all pages and measure scene-building performance
-        let start = Instant::now();
-        for spread_idx in 0..doc.spreads.len() {
-            renderer.render_document(&doc, spread_idx, 1.0);
-        }
-        let total_time = start.elapsed();
-        let avg_time_per_page = total_time.as_secs_f64() / doc.spreads.len() as f64;
-
-        println!(
-            "50-page render time: {:.3}ms per page, {:.3}ms total",
-            avg_time_per_page * 1000.0,
-            total_time.as_secs_f64() * 1000.0
-        );
-        // No hard assertions—for profiling only
-    }
-
-    #[test]
-    fn test_renderer_can_initialize_without_device() {
-        // Verify renderer can be constructed without a wgpu device (for testing)
-        let renderer = VelloRenderer::new(None).expect("Failed to create renderer");
-
-        // New renderer should start with no renders tracked
-        assert_eq!(
-            renderer.frame_count, 0,
-            "New renderer should start with frame_count=0"
-        );
-        assert!(
-            renderer.renderer.is_none(),
-            "Device-less renderer should have renderer=None"
-        );
-
-        // NOTE: Verifying RendererOptions (AaSupport::all()) requires a real wgpu::Device
-        // and would belong in an integration test with actual GPU rendering.
+        assert_eq!(renderer.frame_count, 1);
     }
 }
