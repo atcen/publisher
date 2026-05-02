@@ -9,3 +9,5 @@ dist/
 /apps/desktop/src-tauri/gen/
 /apps/web/test-results/
 /apps/web/playwright-report/
+/.agent-run/
+.agent-context/

@@ -170,11 +170,28 @@ jobs:
         if: runner.os == 'Linux'
         run: echo "PKG_CONFIG_PATH=/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/lib/pkgconfig:/usr/share/pkgconfig" >> $GITHUB_ENV
 
+      - name: Install dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install harfbuzz freetype lcms2
+          echo "HARFBUZZ_SYS_NO_PKG_CONFIG=1" >> $GITHUB_ENV
+          echo "FREETYPE_NO_PKG_CONFIG=1" >> $GITHUB_ENV
+          echo "LCMS2_SYS_STATIC=1" >> $GITHUB_ENV
+
       - name: Build Desktop App Bundles
-        if: runner.os != 'macOS'
-        uses: tauri-apps/tauri-action@v0
+        uses: tauri-apps/tauri-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # Force static linking for core C libraries across all platforms
+          HARFBUZZ_SYS_NO_PKG_CONFIG: 1
+          FREETYPE_NO_PKG_CONFIG: 1
+          LCMS2_SYS_STATIC: 1
         with:
           args: "--target ${{ matrix.target }}"
           projectPath: "apps/desktop"
