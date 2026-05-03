@@ -367,7 +367,11 @@ class DocumentStore {
     this.pushToUndo();
     frame.data.Text.frame_type = newType;
     if (newType === 'Point') {
-      const fontSize = frame.data.Text.font_size_override ?? 12;
+      if (!frame.data.Text.font_size_override) {
+        const style = this.doc.styles.paragraph_styles.find(s => s.name === frame.data.Text!.paragraph_style) || this.doc.styles.paragraph_styles[0];
+        frame.data.Text.font_size_override = style?.font_size ?? 12;
+      }
+      const fontSize = frame.data.Text.font_size_override;
       frame.width = Math.max(20, frame.data.Text.content.length * (fontSize * 0.5));
       frame.height = fontSize * 1.4;
     }

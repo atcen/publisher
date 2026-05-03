@@ -123,12 +123,19 @@
     const x = (e.clientX - r.left) / uiStore.zoom;
     const y = (e.clientY - r.top) / uiStore.zoom;
     
+    // Check if shift is pressed to create Point Text
+    const frameType: TextFrameType = (uiStore.activeTool === 'text' && e.shiftKey) ? 'Point' : 'Area';
+    
     const nf: Frame = { 
       id: crypto.randomUUID(), 
       layer_id: targetLayer.id, 
-      x, y, width: 0, height: 0, rotation: 0, stroke_width: 0, 
+      x, y, 
+      width: uiStore.activeTool === 'text' ? 150 : 0, 
+      height: uiStore.activeTool === 'text' ? 50 : 0, 
+      rotation: 0, 
+      stroke_width: 0, 
       data: uiStore.activeTool === 'text' 
-        ? { Text: { content: "", align_to_baseline_grid: false, frame_type: 'Area' } }
+        ? { Text: { content: "", align_to_baseline_grid: false, frame_type: frameType } }
         : { Image: { asset_path: "", content_x: 0, content_y: 0, content_scale_x: 1, content_scale_y: 1, fitting: 'Fit' } }    };
     
     page.frames.push(nf);
@@ -136,6 +143,7 @@
     currentCreating = nf;
     isCreating = true;
     dragStart = { x: e.clientX, y: e.clientY };
+    initial = { x: x, y: y, w: nf.width, h: nf.height };
   }
 
   async function handleMouseMove(e: MouseEvent) {
@@ -194,8 +202,13 @@
       docStore.markModified();
     }
     else if (isCreating && currentCreating) {
-      currentCreating.width = Math.max(0, dx);
-      currentCreating.height = Math.max(0, dy);
+      if (uiStore.activeTool === 'text') {
+        currentCreating.width = Math.max(20, initial.w + dx);
+        currentCreating.height = Math.max(20, initial.h + dy);
+      } else {
+        currentCreating.width = Math.max(0, dx);
+        currentCreating.height = Math.max(0, dy);
+      }
       docStore.markModified();
     }
     else if (isDraggingGuide && currentDraggingGuide) {
@@ -211,9 +224,12 @@
   }
 
   function handleMouseUp() {
-    if (isCreating && currentCreating && (currentCreating.width < 5 || currentCreating.height < 5)) {
-      for (const s of docStore.doc.spreads) for (const p of s.pages) p.frames = p.frames.filter(f => f.id !== currentCreating!.id);
-      uiStore.selectedFrameIds = [];
+    if (isCreating && currentCreating) {
+      const minSize = uiStore.activeTool === 'text' ? 5 : 5;
+      if (currentCreating.width < minSize || currentCreating.height < minSize) {
+        for (const s of docStore.doc.spreads) for (const p of s.pages) p.frames = p.frames.filter(f => f.id !== currentCreating!.id);
+        uiStore.selectedFrameIds = [];
+      }
     }
     isDragging = isResizing = isCreating = isDraggingGuide = false;
     uiStore.snapX = uiStore.snapY = null;

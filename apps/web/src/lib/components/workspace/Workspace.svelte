@@ -63,6 +63,7 @@
             class="page" 
             style="width: {page.width}px; height: {page.height}px;" 
             onmousedown={(e) => onPageMouseDown(e, page)}
+            onclick={(e) => e.stopPropagation()}
           >
             {#if uiStore.snapX !== null}<div class="snap-guide vertical" style="left: {uiStore.snapX}px"></div>{/if}
             {#if uiStore.snapY !== null}<div class="snap-guide horizontal" style="top: {uiStore.snapY}px"></div>{/if}
