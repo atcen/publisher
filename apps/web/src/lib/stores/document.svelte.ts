@@ -361,6 +361,18 @@ class DocumentStore {
       console.error("Distribution failed", e);
     }
   }
+
+  convertTextFrameType(frame: Frame, newType: 'Point' | 'Area') {
+    if (!frame.data.Text) return;
+    this.pushToUndo();
+    frame.data.Text.frame_type = newType;
+    if (newType === 'Point') {
+      const fontSize = frame.data.Text.font_size_override ?? 12;
+      frame.width = Math.max(20, frame.data.Text.content.length * (fontSize * 0.5));
+      frame.height = fontSize * 1.4;
+    }
+    this.markModified();
+  }
 }
 
 export const docStore = new DocumentStore();

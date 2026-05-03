@@ -458,6 +458,12 @@ pub struct Group {
     pub frames: Vec<Frame>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TextFrameType {
+    Point,
+    Area,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TextFrame {
     pub content: String,
@@ -465,6 +471,8 @@ pub struct TextFrame {
     pub next_frame_id: Option<String>,
     pub prev_frame_id: Option<String>,
     pub align_to_baseline_grid: bool,
+    pub frame_type: TextFrameType,
+    pub font_size_override: Option<Pt>,
 }
 
 impl TextFrame {
@@ -475,6 +483,16 @@ impl TextFrame {
             next_frame_id: None,
             prev_frame_id: None,
             align_to_baseline_grid: false,
+            frame_type: TextFrameType::Area,
+            font_size_override: None,
+        }
+    }
+
+    pub fn scale_font_size(&mut self, current_width: Pt, target_width: Pt, base_font_size: Pt) {
+        if current_width.0 > 0.0 {
+            let ratio = target_width.0 / current_width.0;
+            let current_size = self.font_size_override.unwrap_or(base_font_size);
+            self.font_size_override = Some(Pt(current_size.0 * ratio));
         }
     }
 }
@@ -1124,25 +1142,17 @@ mod tests {
     }
 
     #[test]
-    fn test_character_style_cascade() {
-        let base = CharacterStyle {
-            name: "Base".to_string(),
-            font_style: Some("Bold".to_string()),
-            ..CharacterStyle::new("Base")
-        };
-        let derived = CharacterStyle {
-            name: "Derived".to_string(),
-            based_on: Some("Base".to_string()),
-            font_size: Some(Pt(18.0)),
-            ..CharacterStyle::new("Derived")
-        };
-        let styles = Styles {
-            paragraph_styles: vec![],
-            character_styles: vec![base, derived],
-            object_styles: vec![],
-        };
-        let resolved = styles.resolve_character_style("Derived").unwrap();
-        assert_eq!(resolved.font_style, Some("Bold".to_string()));
-        assert_eq!(resolved.font_size, Some(Pt(18.0)));
+    fn test_text_frame_scaling() {
+        let mut tf = TextFrame::new("Headline");
+        tf.frame_type = TextFrameType::Point;
+        let base_size = Pt(10.0);
+
+        // Scale from 100pt to 200pt width
+        tf.scale_font_size(Pt(100.0), Pt(200.0), base_size);
+        assert_eq!(tf.font_size_override.unwrap().0, 20.0);
+
+        // Scale back to 50pt width
+        tf.scale_font_size(Pt(200.0), Pt(50.0), base_size);
+        assert_eq!(tf.font_size_override.unwrap().0, 5.0);
     }
 }

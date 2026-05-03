@@ -1,0 +1,574 @@
+#!/usr/bin/env python3
+"""Issue-oriented Codex orchestrator for Publisher.
+
+The script deliberately keeps coordination deterministic:
+- one Git worktree per GitHub issue
+- one state file per issue
+- generated prompts for test/dev/review phases
+- optional non-interactive Codex execution with bounded review loops
+"""
+
+from __future__ import annotations
+
+import argparse
+import datetime as dt
+import json
+import re
+import shlex
+import subprocess
+import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
+from typing import Any
+
+
+ROOT = Path(__file__).resolve().parents[1]
+CONFIG_PATH = ROOT / "agent-run.json"
+
+
+class CommandError(RuntimeError):
+    pass
+
+
+def run(
+    args: list[str],
+    *,
+    cwd: Path = ROOT,
+    check: bool = True,
+    capture: bool = False,
+    input_text: str | None = None,
+) -> subprocess.CompletedProcess[str]:
+    result = subprocess.run(
+        args,
+        cwd=cwd,
+        check=False,
+        text=True,
+        input=input_text,
+        stdout=subprocess.PIPE if capture else None,
+        stderr=subprocess.STDOUT if capture else None,
+    )
+    if check and result.returncode != 0:
+        detail = result.stdout if capture else "command failed"
+        raise CommandError(f"{shlex.join(args)}\n{detail}")
+    return result
+
+
+def load_config() -> dict[str, Any]:
+    if not CONFIG_PATH.exists():
+        raise CommandError(f"missing config: {CONFIG_PATH}")
+    with CONFIG_PATH.open("r", encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+def now_iso() -> str:
+    return dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
+
+
+def slugify(value: str, limit: int = 48) -> str:
+    slug = re.sub(r"[^a-zA-Z0-9]+", "-", value.lower()).strip("-")
+    return (slug or "issue")[:limit].strip("-")
+
+
+def state_root(config: dict[str, Any]) -> Path:
+    return (ROOT / config["state_root"]).resolve()
+
+
+def issue_dir(config: dict[str, Any], issue: int) -> Path:
+    return state_root(config) / "issues" / str(issue)
+
+
+def state_path(config: dict[str, Any], issue: int) -> Path:
+    return issue_dir(config, issue) / "state.json"
+
+
+def read_state(config: dict[str, Any], issue: int) -> dict[str, Any]:
+    path = state_path(config, issue)
+    if not path.exists():
+        raise CommandError(f"issue #{issue} has no state; run `scripts/agent-run issue {issue}` first")
+    with path.open("r", encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+def write_state(config: dict[str, Any], issue: int, state: dict[str, Any]) -> None:
+    directory = issue_dir(config, issue)
+    directory.mkdir(parents=True, exist_ok=True)
+    state["updated_at"] = now_iso()
+    with state_path(config, issue).open("w", encoding="utf-8") as fh:
+        json.dump(state, fh, indent=2, sort_keys=True)
+        fh.write("\n")
+
+
+def fetch_issue(issue: int) -> dict[str, Any]:
+    result = run(
+        [
+            "gh",
+            "issue",
+            "view",
+            str(issue),
+            "--json",
+            "number,title,body,comments,labels,url,state",
+        ],
+        capture=True,
+    )
+    return json.loads(result.stdout or "{}")
+
+
+def branch_exists(branch: str) -> bool:
+    return run(["git", "rev-parse", "--verify", "--quiet", branch], check=False).returncode == 0
+
+
+def create_or_reuse_worktree(config: dict[str, Any], issue: dict[str, Any]) -> tuple[str, Path]:
+    issue_number = int(issue["number"])
+    branch = f'{config["branch_prefix"]}-{issue_number}-{slugify(issue["title"])}'
+    worktree_root = (ROOT / config["worktree_root"]).resolve()
+    worktree = worktree_root / branch.replace("/", "-")
+    worktree_root.mkdir(parents=True, exist_ok=True)
+
+    existing = run(["git", "worktree", "list", "--porcelain"], capture=True).stdout
+    if f"worktree {worktree}\n" in existing:
+        ensure_worktree_excludes(worktree)
+        return branch, worktree
+
+    run(["git", "fetch", "origin", config["base_branch"]])
+    if branch_exists(branch):
+        run(["git", "worktree", "add", str(worktree), branch])
+    else:
+        run(["git", "worktree", "add", "-b", branch, str(worktree), f'origin/{config["base_branch"]}'])
+    ensure_worktree_excludes(worktree)
+    return branch, worktree
+
+
+def ensure_worktree_excludes(worktree: Path) -> None:
+    exclude_path = Path(run(["git", "rev-parse", "--git-path", "info/exclude"], cwd=worktree, capture=True).stdout.strip())
+    if not exclude_path.is_absolute():
+        exclude_path = worktree / exclude_path
+    exclude_path.parent.mkdir(parents=True, exist_ok=True)
+    existing = exclude_path.read_text(encoding="utf-8") if exclude_path.exists() else ""
+    additions = [".agent-context/"]
+    missing = [entry for entry in additions if entry not in existing.splitlines()]
+    if missing:
+        with exclude_path.open("a", encoding="utf-8") as fh:
+            if existing and not existing.endswith("\n"):
+                fh.write("\n")
+            for entry in missing:
+                fh.write(f"{entry}\n")
+
+
+def issue_markdown(issue: dict[str, Any]) -> str:
+    labels = ", ".join(label["name"] for label in issue.get("labels", [])) or "none"
+    comments = issue.get("comments", [])
+    rendered_comments = "\n\n".join(
+        f'### Comment by {comment.get("author", {}).get("login", "unknown")}\n\n{comment.get("body", "")}'
+        for comment in comments
+    )
+    return f"""# GitHub Issue #{issue["number"]}: {issue["title"]}
+
+URL: {issue.get("url", "")}
+State: {issue.get("state", "")}
+Labels: {labels}
+
+## Body
+
+{issue.get("body") or "_No issue body._"}
+
+## Comments
+
+{rendered_comments or "_No comments._"}
+"""
+
+
+def write_prompts(config: dict[str, Any], issue: dict[str, Any], worktree: Path) -> dict[str, str]:
+    number = int(issue["number"])
+    labels = {label["name"] for label in issue.get("labels", [])}
+    ci_gated = bool(labels.intersection(set(config.get("ci_gated_labels", []))))
+    directory = issue_dir(config, number)
+    prompts = directory / "prompts"
+    prompts.mkdir(parents=True, exist_ok=True)
+    issue_md = directory / "issue.md"
+    issue_md.write_text(issue_markdown(issue), encoding="utf-8")
+
+    test_prompt = f"""You are the test agent for Publisher GitHub issue #{number}.
+
+Read `.agent-context/issue.md`, `CLAUDE.md`, and the relevant code before editing.
+
+Your job:
+- Convert every acceptance criterion into tests before implementation.
+- Prefer Rust tests for core/backend behavior and Playwright tests for UI behavior.
+- For CI/release/environment-only issues, write checks that assert workflow behavior or artifact validation, even if they cannot reproduce the CI failure locally.
+- Do not implement production code.
+- Run the narrowest relevant test command and confirm the new tests are red for the expected reason.
+- If the issue cannot be made locally red because the failure only occurs in CI/release infrastructure, explain that and use `TEST_STATUS: ci-gated`.
+- Commit only test changes with message: `Add failing tests for issue #{number}`.
+
+Stop after the red TDD commit.
+Your final line must be exactly one of:
+TEST_STATUS: red
+TEST_STATUS: ci-gated
+TEST_STATUS: blocked <short reason>
+
+This issue is classified as CI-gated: {str(ci_gated).lower()}
+"""
+
+    dev_prompt = f"""You are the dev agent for Publisher GitHub issue #{number}.
+
+Read `.agent-context/issue.md`, `CLAUDE.md`, the failing tests, and any review notes in `.agent-context/review-notes.md` if present.
+
+Your job:
+- Implement only the production changes needed to satisfy the tests and issue requirements.
+- Preserve the architecture constraints in `CLAUDE.md`.
+- For CI-gated issues, prioritize workflow/artifact validation changes and document which behavior must be proven by GitHub Actions.
+- Do not weaken or delete tests unless they are demonstrably wrong; if so, explain why in your final answer.
+- Run these checks before finishing:
+{format_commands(config["checks"]["test"] + config["checks"]["lint"])}
+- Commit implementation changes with an imperative subject under 72 chars.
+
+Your final line must be exactly one of:
+DEV_STATUS: green
+DEV_STATUS: blocked <short reason>
+"""
+
+    review_prompt = f"""You are the review agent for Publisher GitHub issue #{number}.
+
+Review the current branch against `.agent-context/issue.md`, `CLAUDE.md`, and the diff from `{config["base_branch"]}`.
+
+Review mindset:
+- Findings first, ordered by severity.
+- Focus on bugs, behavioral regressions, architectural violations, missing tests, and unsafe edge cases.
+- Do not edit production or test files.
+
+If you find actionable issues, write them to `.agent-context/review-notes.md` using clear file/line references.
+If there are no actionable findings, remove `.agent-context/review-notes.md` if it exists.
+
+Your final line must be exactly one of:
+REVIEW_STATUS: pass
+REVIEW_STATUS: fail
+"""
+
+    prompt_paths = {
+        "test": str(prompts / "test.md"),
+        "dev": str(prompts / "dev.md"),
+        "review": str(prompts / "review.md"),
+    }
+    (prompts / "test.md").write_text(test_prompt, encoding="utf-8")
+    (prompts / "dev.md").write_text(dev_prompt, encoding="utf-8")
+    (prompts / "review.md").write_text(review_prompt, encoding="utf-8")
+
+    context = worktree / ".agent-context"
+    context.mkdir(exist_ok=True)
+    (context / "issue.md").write_text(issue_markdown(issue), encoding="utf-8")
+    return prompt_paths
+
+
+def format_commands(commands: list[str]) -> str:
+    return "\n".join(f"- `{command}`" for command in commands)
+
+
+def prepare_issue(config: dict[str, Any], issue_number: int) -> dict[str, Any]:
+    issue = fetch_issue(issue_number)
+    branch, worktree = create_or_reuse_worktree(config, issue)
+    prompts = write_prompts(config, issue, worktree)
+    state = {
+        "issue": issue_number,
+        "title": issue["title"],
+        "url": issue.get("url"),
+        "labels": [label["name"] for label in issue.get("labels", [])],
+        "branch": branch,
+        "base_branch": config["base_branch"],
+        "worktree": str(worktree),
+        "phase": "prepared",
+        "attempt": 0,
+        "prompts": prompts,
+        "created_at": now_iso(),
+        "checks": {},
+    }
+    write_state(config, issue_number, state)
+    return state
+
+
+def codex_command(config: dict[str, Any], worktree: Path, prompt: Path, output: Path) -> list[str]:
+    codex = config["codex"]
+    command = [
+        codex.get("command") or "codex",
+        "exec",
+        "--cd",
+        str(worktree),
+        "--sandbox",
+        codex.get("sandbox") or "danger-full-access",
+        "--output-last-message",
+        str(output),
+    ]
+    if codex.get("approval_policy"):
+        command.extend(["--ask-for-approval", codex["approval_policy"]])
+    if codex.get("model"):
+        command.extend(["--model", codex["model"]])
+    command.append("-")
+    return command
+
+
+def run_codex_phase(config: dict[str, Any], state: dict[str, Any], phase: str) -> str:
+    issue = int(state["issue"])
+    worktree = Path(state["worktree"])
+    prompt = Path(state["prompts"][phase])
+    logs = issue_dir(config, issue) / "logs"
+    logs.mkdir(parents=True, exist_ok=True)
+    stamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
+    output = logs / f"{stamp}-{phase}-final.md"
+    transcript = logs / f"{stamp}-{phase}.log"
+
+    state["phase"] = phase
+    write_state(config, issue, state)
+
+    cmd = codex_command(config, worktree, prompt, output)
+    with prompt.open("r", encoding="utf-8") as fh:
+        prompt_text = fh.read()
+    with transcript.open("w", encoding="utf-8") as log:
+        process = subprocess.run(
+            cmd,
+            cwd=ROOT,
+            input=prompt_text,
+            text=True,
+            stdout=log,
+            stderr=subprocess.STDOUT,
+            check=False,
+        )
+    if process.returncode != 0:
+        raise CommandError(f"{phase} agent failed; see {transcript}")
+    final = output.read_text(encoding="utf-8") if output.exists() else ""
+    state.setdefault("phase_logs", []).append(
+        {"phase": phase, "transcript": str(transcript), "final": str(output), "completed_at": now_iso()}
+    )
+    write_state(config, issue, state)
+    return final
+
+
+def status_from_final(final: str, prefix: str) -> str:
+    for line in reversed(final.strip().splitlines()):
+        if line.startswith(prefix):
+            return line
+    return ""
+
+
+def run_checks(config: dict[str, Any], state: dict[str, Any]) -> bool:
+    worktree = Path(state["worktree"])
+    results: dict[str, list[dict[str, Any]]] = {}
+    all_green = True
+    for group, commands in config["checks"].items():
+        results[group] = []
+        for command in commands:
+            started = now_iso()
+            result = subprocess.run(command, cwd=worktree, shell=True, text=True)
+            ok = result.returncode == 0
+            all_green = all_green and ok
+            results[group].append(
+                {
+                    "command": command,
+                    "ok": ok,
+                    "exit_code": result.returncode,
+                    "started_at": started,
+                    "completed_at": now_iso(),
+                }
+            )
+    state["checks"] = results
+    state["checks_green"] = all_green
+    write_state(config, int(state["issue"]), state)
+    return all_green
+
+
+def execute_issue(config: dict[str, Any], issue_number: int) -> dict[str, Any]:
+    state = read_state(config, issue_number)
+    test_final = run_codex_phase(config, state, "test")
+    test_status = status_from_final(test_final, "TEST_STATUS:")
+    accepted_test_status = test_status.startswith("TEST_STATUS: red") or test_status.startswith("TEST_STATUS: ci-gated")
+    if not accepted_test_status:
+        state["phase"] = "blocked"
+        state["blocked_reason"] = test_status or "test agent did not report red status"
+        write_state(config, issue_number, state)
+        return state
+    state["test_status"] = test_status
+    write_state(config, issue_number, state)
+
+    max_loops = int(config["max_review_loops"])
+    for attempt in range(1, max_loops + 1):
+        state = read_state(config, issue_number)
+        state["attempt"] = attempt
+        write_state(config, issue_number, state)
+
+        dev_final = run_codex_phase(config, state, "dev")
+        dev_status = status_from_final(dev_final, "DEV_STATUS:")
+        checks_green = run_checks(config, state)
+        if not dev_status.startswith("DEV_STATUS: green") or not checks_green:
+            continue
+
+        review_final = run_codex_phase(config, read_state(config, issue_number), "review")
+        review_status = status_from_final(review_final, "REVIEW_STATUS:")
+        if review_status.startswith("REVIEW_STATUS: pass"):
+            state = read_state(config, issue_number)
+            state["phase"] = "ready_for_pr"
+            write_state(config, issue_number, state)
+            return state
+
+    state = read_state(config, issue_number)
+    state["phase"] = "needs_human"
+    state["blocked_reason"] = f"review loop exceeded {max_loops} attempts"
+    write_state(config, issue_number, state)
+    return state
+
+
+def open_pr(config: dict[str, Any], issue_number: int) -> None:
+    state = read_state(config, issue_number)
+    if state.get("phase") != "ready_for_pr":
+        raise CommandError(f"issue #{issue_number} is {state.get('phase')}, not ready_for_pr")
+    worktree = Path(state["worktree"])
+    run(["git", "push", "-u", "origin", state["branch"]], cwd=worktree)
+    labels = []
+    for label in config["github"].get("labels", []):
+        labels.extend(["--label", label])
+    draft = ["--draft"] if config["github"].get("draft_pr", True) else []
+    body = f"""## Summary
+
+Automated Codex issue workflow for #{issue_number}.
+
+Closes #{issue_number}
+
+## Verification
+
+{format_check_summary(state.get("checks", {}))}
+"""
+    run(
+        [
+            "gh",
+            "pr",
+            "create",
+            "--base",
+            state["base_branch"],
+            "--head",
+            state["branch"],
+            "--title",
+            state["title"],
+            "--body",
+            body,
+            *draft,
+            *labels,
+        ],
+        cwd=worktree,
+    )
+    state["phase"] = "pr_opened"
+    write_state(config, issue_number, state)
+
+
+def format_check_summary(checks: dict[str, list[dict[str, Any]]]) -> str:
+    lines: list[str] = []
+    for group, results in checks.items():
+        for result in results:
+            marker = "pass" if result["ok"] else "fail"
+            lines.append(f"- `{result['command']}`: {marker}")
+    return "\n".join(lines) or "- Not recorded"
+
+
+def print_status(config: dict[str, Any], issue: int | None) -> None:
+    root = state_root(config) / "issues"
+    if issue is not None:
+        states = [read_state(config, issue)]
+    else:
+        states = []
+        if root.exists():
+            for path in sorted(root.glob("*/state.json")):
+                with path.open("r", encoding="utf-8") as fh:
+                    states.append(json.load(fh))
+    if not states:
+        print("No agent issue state found.")
+        return
+    for state in states:
+        print(
+            f"#{state['issue']} {state['phase']} attempt={state.get('attempt', 0)} "
+            f"branch={state['branch']} worktree={state['worktree']}"
+        )
+
+
+def cleanup_issue(config: dict[str, Any], issue_number: int, remove_worktree: bool) -> None:
+    state = read_state(config, issue_number)
+    if remove_worktree:
+        run(["git", "worktree", "remove", state["worktree"]])
+    state["phase"] = "cleaned"
+    write_state(config, issue_number, state)
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Run Codex issue workflows in isolated Git worktrees.")
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    issue = sub.add_parser("issue", help="prepare one issue, optionally execute agents")
+    issue.add_argument("number", type=int)
+    issue.add_argument("--execute", action="store_true", help="run test/dev/review agents after preparing")
+    issue.add_argument("--pr", action="store_true", help="open a draft PR after a green review")
+
+    issues = sub.add_parser("issues", help="prepare multiple issues")
+    issues.add_argument("numbers", nargs="+", type=int)
+    issues.add_argument("--execute", action="store_true", help="execute prepared issue workflows")
+    issues.add_argument("--parallel", type=int, default=1, help="parallel issue executions after preparation")
+    issues.add_argument("--pr", action="store_true", help="open draft PRs after green reviews")
+
+    resume = sub.add_parser("resume", help="resume execution for an already prepared issue")
+    resume.add_argument("number", type=int)
+    resume.add_argument("--pr", action="store_true", help="open a draft PR after a green review")
+
+    pr = sub.add_parser("pr", help="push and open PR for a ready issue")
+    pr.add_argument("number", type=int)
+
+    status = sub.add_parser("status", help="show issue workflow state")
+    status.add_argument("number", nargs="?", type=int)
+
+    cleanup = sub.add_parser("cleanup", help="mark an issue run cleaned")
+    cleanup.add_argument("number", type=int)
+    cleanup.add_argument("--remove-worktree", action="store_true")
+
+    return parser.parse_args()
+
+
+def main() -> int:
+    args = parse_args()
+    config = load_config()
+    try:
+        if args.command == "issue":
+            state = prepare_issue(config, args.number)
+            print(f"prepared #{args.number}: {state['worktree']}")
+            if args.execute:
+                state = execute_issue(config, args.number)
+                print(f"finished #{args.number}: {state['phase']}")
+            if args.pr:
+                open_pr(config, args.number)
+        elif args.command == "issues":
+            prepared: list[int] = []
+            for number in args.numbers:
+                state = prepare_issue(config, number)
+                prepared.append(number)
+                print(f"prepared #{number}: {state['worktree']}")
+            if args.execute:
+                workers = max(1, args.parallel)
+                with ThreadPoolExecutor(max_workers=workers) as pool:
+                    futures = {pool.submit(execute_issue, config, number): number for number in prepared}
+                    for future in as_completed(futures):
+                        number = futures[future]
+                        state = future.result()
+                        print(f"finished #{number}: {state['phase']}")
+                        if args.pr:
+                            open_pr(config, number)
+        elif args.command == "resume":
+            state = execute_issue(config, args.number)
+            print(f"finished #{args.number}: {state['phase']}")
+            if args.pr:
+                open_pr(config, args.number)
+        elif args.command == "pr":
+            open_pr(config, args.number)
+        elif args.command == "status":
+            print_status(config, args.number)
+        elif args.command == "cleanup":
+            cleanup_issue(config, args.number, args.remove_worktree)
+        return 0
+    except CommandError as exc:
+        print(f"agent-run: {exc}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

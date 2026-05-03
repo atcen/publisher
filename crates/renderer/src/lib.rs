@@ -226,7 +226,9 @@ impl VelloRenderer {
                     .collect();
 
                 let options = publisher_typography::ShapeOptions {
-                    font_size: style.font_size.unwrap_or(publisher_core::Pt(12.0)),
+                    font_size: text_frame
+                        .font_size_override
+                        .unwrap_or(style.font_size.unwrap_or(publisher_core::Pt(12.0))),
                     alignment: style
                         .alignment
                         .unwrap_or(publisher_core::TextAlignment::Left),

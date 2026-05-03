@@ -89,17 +89,38 @@
     <div class="properties">
       {#if frame.data.Text}
         <label>Absatzformat 
-          <select bind:value={frame.data.Text.paragraph_style}>
+          <select bind:value={frame.data.Text.paragraph_style} onchange={() => docStore.markModified()}>
             {#each docStore.doc.styles.paragraph_styles as s}
               <option value={s.name}>{s.name}</option>
             {/each}
           </select>
         </label>
+        <div class="prop-group">
+          <label>Typ 
+            <select 
+              value={frame.data.Text.frame_type} 
+              onchange={(e) => docStore.convertTextFrameType(frame, (e.target as HTMLSelectElement).value as any)}
+            >
+              <option value="Area">Fließtext (Area)</option>
+              <option value="Point">Punkttext (Point)</option>
+            </select>
+          </label>
+        </div>
+        {#if frame.data.Text.frame_type === 'Point' && frame.data.Text.font_size_override}
+          <div class="prop-group">
+            <label>Schriftgröße 
+              <input type="number" step="0.1" bind:value={frame.data.Text.font_size_override} oninput={() => docStore.markModified()} />
+            </label>
+          </div>
+        {/if}
         <label>
-          <input type="checkbox" bind:checked={frame.data.Text.align_to_baseline_grid} /> 
+          <input type="checkbox" bind:checked={frame.data.Text.align_to_baseline_grid} onchange={() => docStore.markModified()} /> 
           Am Grundraster ausrichten
         </label>
-        <textarea bind:value={frame.data.Text.content}></textarea>
+        <textarea 
+          bind:value={frame.data.Text.content} 
+          oninput={() => { if (frame.data.Text?.frame_type === 'Point') docStore.convertTextFrameType(frame, 'Point'); docStore.markModified(); }}
+        ></textarea>
       {/if}
       
       {#if frame.data.Image}
