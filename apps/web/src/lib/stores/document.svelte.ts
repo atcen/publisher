@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { Document, Page, Spread, Frame, ParagraphStyle, CharacterStyle, ColorSwatch, Color, AlignMode, DistributeMode, Pt } from "../types";
+import type { Document, Page, Spread, Frame, ParagraphStyle, CharacterStyle, ColorSwatch, Color, AlignMode, DistributeMode, Pt, TextFrameType } from "../types";
 import { prefsStore } from "./prefs.svelte";
 import { uiStore } from "./ui.svelte";
 
@@ -362,7 +362,7 @@ class DocumentStore {
     }
   }
 
-  convertTextFrameType(frame: Frame, newType: 'Point' | 'Area') {
+  convertTextFrameType(frame: Frame, newType: TextFrameType) {
     if (!frame.data.Text) return;
     this.pushToUndo();
     frame.data.Text.frame_type = newType;

@@ -8,7 +8,7 @@
   import { prefsStore } from "./lib/stores/prefs.svelte";
   
   // Types
-  import type { Page, Frame, Guide, ImageFrame, ParagraphStyle, CharacterStyle, ColorSwatch } from "./lib/types";
+  import type { Page, Frame, Guide, ImageFrame, ParagraphStyle, CharacterStyle, ColorSwatch, TextFrameType } from "./lib/types";
   
   
   // Components
@@ -58,10 +58,11 @@
       await prefsStore.load();
       try {
         const recoveryJson = await invoke<string | null>("check_recovery_file");
-        if (recoveryJson && confirm("Wiederherstellung: Ein nicht gespeichertes Dokument wurde gefunden. Wiederherstellen?")) {
-          docStore.doc = JSON.parse(recoveryJson);
-          docStore.hasUnsavedChanges = true;
-        } else { await invoke("clear_recovery_file"); }
+        // if (recoveryJson && confirm("Wiederherstellung: Ein nicht gespeichertes Dokument wurde gefunden. Wiederherstellen?")) {
+        //   docStore.doc = JSON.parse(recoveryJson);
+        //   docStore.hasUnsavedChanges = true;
+        // } else { await invoke("clear_recovery_file"); }
+        await invoke("clear_recovery_file");
       } catch (e) { console.error("Recovery check failed", e); }
     };
     init();
