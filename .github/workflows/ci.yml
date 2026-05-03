@@ -195,28 +195,25 @@ jobs:
         if: runner.os == 'macOS'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           # Force static linking for core C libraries
           HARFBUZZ_SYS_NO_PKG_CONFIG: 1
           FREETYPE_NO_PKG_CONFIG: 1
           LCMS2_SYS_STATIC: 1
         run: |
           # Only attempt signing if the certificate secret is present
-          if [ -n "$APPLE_CERTIFICATE" ]; then
-            npm --prefix apps/desktop run tauri -- build --target "${{ matrix.target }}" --bundles app
+          if [ -n "${{ secrets.APPLE_CERTIFICATE }}" ]; then
+            echo "APPLE_CERTIFICATE present, enabling signing"
+            export APPLE_CERTIFICATE="${{ secrets.APPLE_CERTIFICATE }}"
+            export APPLE_CERTIFICATE_PASSWORD="${{ secrets.APPLE_CERTIFICATE_PASSWORD }}"
+            export APPLE_SIGNING_IDENTITY="${{ secrets.APPLE_SIGNING_IDENTITY }}"
+            export APPLE_ID="${{ secrets.APPLE_ID }}"
+            export APPLE_PASSWORD="${{ secrets.APPLE_PASSWORD }}"
+            export APPLE_TEAM_ID="${{ secrets.APPLE_TEAM_ID }}"
           else
             echo "Warning: APPLE_CERTIFICATE missing, building unsigned bundle"
-            npm --prefix apps/desktop run tauri -- build --target "${{ matrix.target }}" --bundles app --no-bundle
-            # We still want the .app for our manual DMG creation, but without codesigning
-            # Tauri 2.0 might still create the .app even with --no-bundle if we use --bundles app
-            # Let's try to just run the build and rely on it failing signing gracefully if env is missing,
-            # or use a more explicit check.
           fi
+          
+          npm --prefix apps/desktop run tauri -- build --target "${{ matrix.target }}" --bundles app
 
       - name: Create macOS DMG
         if: runner.os == 'macOS'
