@@ -5,17 +5,17 @@
 <aside class="toolbar">
   <button 
     class:active={uiStore.activeTool === 'select'} 
-    onclick={() => uiStore.activeTool = 'select'}
+    onclick={() => { uiStore.activeTool = 'select'; uiStore.isContentMode = false; }}
     title="Auswählen (V)"
   >V</button>
   <button 
     class:active={uiStore.activeTool === 'text'} 
-    onclick={() => uiStore.activeTool = 'text'}
+    onclick={() => { uiStore.activeTool = 'text'; uiStore.isContentMode = false; }}
     title="Text (T)"
   >T</button>
   <button 
     class:active={uiStore.activeTool === 'image'} 
-    onclick={() => uiStore.activeTool = 'image'}
+    onclick={() => { uiStore.activeTool = 'image'; uiStore.isContentMode = false; }}
     title="Rahmen (F)"
   >F</button>
 </aside>

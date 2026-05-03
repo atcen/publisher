@@ -117,10 +117,6 @@
           <input type="checkbox" bind:checked={frame.data.Text.align_to_baseline_grid} onchange={() => docStore.markModified()} /> 
           Am Grundraster ausrichten
         </label>
-        <textarea 
-          bind:value={frame.data.Text.content} 
-          oninput={() => { if (frame.data.Text?.frame_type === 'Point') docStore.convertTextFrameType(frame, 'Point'); docStore.markModified(); }}
-        ></textarea>
       {/if}
       
       {#if frame.data.Image}

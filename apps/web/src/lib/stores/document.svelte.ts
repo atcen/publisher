@@ -43,6 +43,8 @@ class DocumentStore {
 
   markModified() {
     this.hasUnsavedChanges = true;
+    // Svelte 5 $state is deeply reactive. Root object swap is not needed 
+    // and can break object identity for active interactions.
   }
 
   reorganizeSpreads() {
@@ -371,11 +373,40 @@ class DocumentStore {
         const style = this.doc.styles.paragraph_styles.find(s => s.name === frame.data.Text!.paragraph_style) || this.doc.styles.paragraph_styles[0];
         frame.data.Text.font_size_override = style?.font_size ?? 12;
       }
+      
+      const content = frame.data.Text.content;
       const fontSize = frame.data.Text.font_size_override;
-      // If content is empty, provide a default width of 100pt so it's visible and clickable
-      const contentLen = frame.data.Text.content.length;
-      frame.width = contentLen === 0 ? 100 : Math.max(20, contentLen * (fontSize * 0.5));
-      frame.height = fontSize * 1.4;
+
+      // Professional Measurement Logic
+      if (typeof document !== 'undefined') {
+        const ruler = document.createElement('div');
+        ruler.style.visibility = 'hidden';
+        ruler.style.position = 'absolute';
+        ruler.style.whiteSpace = 'pre-wrap';
+        ruler.style.wordBreak = 'break-word';
+        ruler.style.fontFamily = 'sans-serif';
+        ruler.style.fontSize = `${fontSize}px`;
+        ruler.style.lineHeight = '1.2';
+        ruler.style.padding = '0';
+        ruler.style.width = 'auto'; // Let it expand
+        
+        // Ensure trailing newlines are counted in height
+        ruler.textContent = content.endsWith('\n') ? content + '\u200b' : (content || ' '); 
+        
+        document.body.appendChild(ruler);
+        
+        const rect = ruler.getBoundingClientRect();
+        frame.width = Math.max(20, Math.ceil(rect.width) + 2); 
+        frame.height = Math.ceil(rect.height);
+        
+        document.body.removeChild(ruler);
+      } else {
+        // Fallback for non-browser environments
+        const lines = content.split('\n');
+        const maxLen = Math.max(...lines.map(l => l.length));
+        frame.width = Math.max(20, maxLen * (fontSize * 0.5));
+        frame.height = lines.length * (fontSize * 1.2);
+      }
     }
     this.markModified();
   }
