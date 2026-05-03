@@ -110,10 +110,12 @@
                       class:selected={uiStore.selectedFrameIds.includes(frame.id)} 
                       class:content-mode={uiStore.isContentMode && uiStore.selectedFrameIds.includes(frame.id)} 
                       onmousedown={(e) => onFrameMouseDown(e, frame)} 
-                      style="left: {frame.x}px; top: {frame.y}px; width: {frame.width}px; height: {frame.height}px; transform: rotate({frame.rotation}deg); --layer-color: {layer.color}; background: {frame.fill_color ? getSwatchColor(frame.fill_color, docStore.doc) : 'transparent'}; border: {frame.stroke_width}px solid {frame.stroke_color ? getSwatchColor(frame.stroke_color, docStore.doc) : 'transparent'};"
+                      style="left: {frame.x}px; top: {frame.y}px; width: {frame.width}px; height: {frame.height}px; transform: rotate({frame.rotation}deg); --layer-color: {layer.color}; background: {frame.fill_color ? getSwatchColor(frame.fill_color, docStore.doc) : 'transparent'}; border: {frame.stroke_width}px solid {frame.stroke_color ? getSwatchColor(frame.stroke_color, docStore.doc) : 'transparent'}; {frame.data.Text ? `font-size: ${frame.data.Text.font_size_override ?? (docStore.doc.styles.paragraph_styles.find(s => s.name === frame.data.Text?.paragraph_style) || docStore.doc.styles.paragraph_styles[0]).font_size ?? 12}px;` : ''}"
                     >
                       {#if frame.data.Text}
-                        {frame.data.Text.content}
+                        <div class="text-content-wrapper">
+                          {frame.data.Text.content}
+                        </div>
                       {:else if frame.data.Image}
                         <div class="image-content" style="transform: translate({frame.data.Image.content_x}px, {frame.data.Image.content_y}px) scale({frame.data.Image.content_scale_x}, {frame.data.Image.content_scale_y});">
                           <div class="image-placeholder">{#if frame.data.Image.asset_path}Bild{:else}Kein Bild{/if}</div>
@@ -175,9 +177,10 @@
   .snap-guide { position: absolute; border: 1px dashed #ff00ff; z-index: 100; pointer-events: none; }
   .snap-guide.horizontal { left: 0; right: 0; }
   .snap-guide.vertical { top: 0; bottom: 0; }
-  .frame { position: absolute; border: 1px solid transparent; }
-  .frame.selected { border: 1px solid var(--layer-color, #007acc) !important; box-shadow: 0 0 0 1px var(--layer-color, #007acc); }
-  .frame.content-mode { border-color: orange !important; box-shadow: 0 0 0 1px orange; }
+  .frame { position: absolute; border: none; box-sizing: border-box; overflow: hidden; background: rgba(128, 128, 128, 0.05); }
+  .frame.selected { outline: 1px solid var(--layer-color, #007acc) !important; outline-offset: -1px; z-index: 10; }
+  .frame.content-mode { outline: 1px solid orange !important; outline-offset: -1px; }
+  .text-content-wrapper { width: 100%; height: 100%; white-space: pre-wrap; word-break: break-word; pointer-events: none; }
   .parent-frame { opacity: 0.6; cursor: copy; border: 1px dashed #007acc88 !important; }
   .parent-frame:hover { opacity: 1; border-color: #007acc !important; }
   .override-hint { position: absolute; top: -15px; left: 0; font-size: 9px; color: #007acc; background: white; padding: 1px 4px; display: none; white-space: nowrap; }

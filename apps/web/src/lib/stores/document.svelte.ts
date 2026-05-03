@@ -372,7 +372,9 @@ class DocumentStore {
         frame.data.Text.font_size_override = style?.font_size ?? 12;
       }
       const fontSize = frame.data.Text.font_size_override;
-      frame.width = Math.max(20, frame.data.Text.content.length * (fontSize * 0.5));
+      // If content is empty, provide a default width of 100pt so it's visible and clickable
+      const contentLen = frame.data.Text.content.length;
+      frame.width = contentLen === 0 ? 100 : Math.max(20, contentLen * (fontSize * 0.5));
       frame.height = fontSize * 1.4;
     }
     this.markModified();

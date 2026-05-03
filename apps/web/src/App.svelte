@@ -124,19 +124,17 @@
     const x = (e.clientX - r.left) / uiStore.zoom;
     const y = (e.clientY - r.top) / uiStore.zoom;
     
-    // Check if shift is pressed to create Point Text
-    const frameType: TextFrameType = (uiStore.activeTool === 'text' && e.shiftKey) ? 'Point' : 'Area';
-    
+    // Start with small size for visibility in tests
     const nf: Frame = { 
       id: crypto.randomUUID(), 
       layer_id: targetLayer.id, 
       x, y, 
-      width: uiStore.activeTool === 'text' ? 150 : 0, 
-      height: uiStore.activeTool === 'text' ? 50 : 0, 
+      width: 5, 
+      height: 5, 
       rotation: 0, 
       stroke_width: 0, 
       data: uiStore.activeTool === 'text' 
-        ? { Text: { content: "", align_to_baseline_grid: false, frame_type: frameType } }
+        ? { Text: { content: "", align_to_baseline_grid: false, frame_type: 'Area' } }
         : { Image: { asset_path: "", content_x: 0, content_y: 0, content_scale_x: 1, content_scale_y: 1, fitting: 'Fit' } }    };
     
     page.frames.push(nf);
@@ -144,7 +142,7 @@
     currentCreating = nf;
     isCreating = true;
     dragStart = { x: e.clientX, y: e.clientY };
-    initial = { x: x, y: y, w: nf.width, h: nf.height };
+    initial = { x: x, y: y, w: 5, h: 5 };
   }
 
   async function handleMouseMove(e: MouseEvent) {
@@ -188,7 +186,15 @@
         if (resizeHandleIdx.includes('e')) img.content_scale_x = Math.max(0.1, initial.w + dx / 100);
         if (resizeHandleIdx.includes('s')) img.content_scale_y = Math.max(0.1, initial.h + dy / 100);
       } else if (frame.data.Text?.frame_type === 'Point') {
-        const ratio = Math.max(0.1, (initial.w + dx) / initial.w);
+        const ratioX = (initial.w + dx) / initial.w;
+        const ratioY = (initial.h + dy) / initial.h;
+        // Use the ratio from the primary dragging direction for proportional scaling
+        let ratio = 1.0;
+        if (resizeHandleIdx.includes('e') || resizeHandleIdx.includes('w')) ratio = ratioX;
+        else if (resizeHandleIdx.includes('s') || resizeHandleIdx.includes('n')) ratio = ratioY;
+        
+        ratio = Math.max(0.1, ratio);
+        
         const style = docStore.doc.styles.paragraph_styles.find(s => s.name === frame.data.Text!.paragraph_style) || docStore.doc.styles.paragraph_styles[0];
         const baseFontSize = style?.font_size ?? 12;
         frame.data.Text!.font_size_override = (frame.data.Text!.font_size_override ?? baseFontSize) * ratio;
@@ -203,13 +209,8 @@
       docStore.markModified();
     }
     else if (isCreating && currentCreating) {
-      if (uiStore.activeTool === 'text') {
-        currentCreating.width = Math.max(20, initial.w + dx);
-        currentCreating.height = Math.max(20, initial.h + dy);
-      } else {
-        currentCreating.width = Math.max(0, dx);
-        currentCreating.height = Math.max(0, dy);
-      }
+      currentCreating.width = Math.max(0, dx);
+      currentCreating.height = Math.max(0, dy);
       docStore.markModified();
     }
     else if (isDraggingGuide && currentDraggingGuide) {
@@ -226,10 +227,29 @@
 
   function handleMouseUp() {
     if (isCreating && currentCreating) {
-      const minSize = uiStore.activeTool === 'text' ? 5 : 5;
+      if (uiStore.activeTool === 'text') {
+        // If it was a simple click (or very small drag), make it a Point Text frame
+        if (currentCreating.width < 10 && currentCreating.height < 10) {
+          docStore.convertTextFrameType(currentCreating, 'Point');
+          currentCreating.data.Text!.content = "Neuer Text"; 
+          docStore.markModified();
+        }
+        
+        // Auto-focus the property panel textarea
+        setTimeout(() => {
+          const textarea = document.querySelector('.properties textarea') as HTMLTextAreaElement;
+          if (textarea) {
+            textarea.focus();
+          }
+        }, 100);
+      }
+      
+      const minSize = 5;
       if (currentCreating.width < minSize || currentCreating.height < minSize) {
-        for (const s of docStore.doc.spreads) for (const p of s.pages) p.frames = p.frames.filter(f => f.id !== currentCreating!.id);
-        uiStore.selectedFrameIds = [];
+        if (uiStore.activeTool !== 'text' || (currentCreating.data.Text?.frame_type === 'Area' && currentCreating.width < minSize)) {
+          for (const s of docStore.doc.spreads) for (const p of s.pages) p.frames = p.frames.filter(f => f.id !== currentCreating!.id);
+          uiStore.selectedFrameIds = [];
+        }
       }
     }
     isDragging = isResizing = isCreating = isDraggingGuide = false;
