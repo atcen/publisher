@@ -4,7 +4,7 @@
   import { docStore } from "./lib/stores/document.svelte";
   import { uiStore } from "./lib/stores/ui.svelte";
   import { prefsStore } from "./lib/stores/prefs.svelte";
-  import type { Page, Frame, Guide, ImageFrame, ParagraphStyle, CharacterStyle, ColorSwatch, TextFrameType } from "./lib/types";
+  import type { Page, Frame, Guide, ImageFrame, ParagraphStyle, CharacterStyle, ColorSwatch, TextFrameType, Orientation } from "./lib/types";
   
   import MenuBar from "./lib/components/layout/MenuBar.svelte";
   import Toolbar from "./lib/components/layout/Toolbar.svelte";
@@ -25,6 +25,11 @@
     page: null as Page | null,
     handle: ""
   };
+
+  // State for resource editing
+  let currentEditingSwatch = $state<ColorSwatch | undefined>(undefined);
+  let currentEditingParaStyle = $state<ParagraphStyle | undefined>(undefined);
+  let currentEditingCharStyle = $state<CharacterStyle | undefined>(undefined);
 
   function handleGlobalMove(e: MouseEvent) {
     if (!interaction.active) return;
@@ -136,7 +141,7 @@
     <SidebarLeft />
     <Workspace 
       onPageMouseDown={startCreating}
-      onFrameMouseDown={(e, f) => { 
+      onFrameMouseDown={(e: MouseEvent, f: Frame) => { 
         e.stopPropagation(); 
         if (!uiStore.selectedFrameIds.includes(f.id)) uiStore.isContentMode = false;
         uiStore.selectedFrameIds = [f.id]; 
@@ -146,8 +151,8 @@
         interaction.initialModel = {x:f.x, y:f.y, w:f.width, h:f.height}; 
         interaction.frame = f; 
       }}
-      onResizeMouseDown={(e, f, h) => { e.stopPropagation(); interaction.active = true; interaction.type = 'resize'; interaction.handle = h; interaction.startClient = { x: e.clientX, y: e.clientY }; interaction.initialModel = {x:f.x, y:f.y, w:f.width, h:f.height}; interaction.frame = f; }}
-      onRulerMouseDown={(e, o) => {
+      onResizeMouseDown={(e: MouseEvent, f: Frame, h: string) => { e.stopPropagation(); interaction.active = true; interaction.type = 'resize'; interaction.handle = h; interaction.startClient = { x: e.clientX, y: e.clientY }; interaction.initialModel = {x:f.x, y:f.y, w:f.width, h:f.height}; interaction.frame = f; }}
+      onRulerMouseDown={(e: MouseEvent, o: Orientation) => {
         e.stopPropagation();
         if (!docStore.activePage) return;
         docStore.pushToUndo();
@@ -159,7 +164,7 @@
         interaction.page = docStore.activePage;
         interaction.startClient = { x: e.clientX, y: e.clientY };
       }}
-      onGuideMouseDown={(e, p, g) => {
+      onGuideMouseDown={(e: MouseEvent, p: Page, g: Guide) => {
         e.stopPropagation();
         interaction.active = true;
         interaction.type = 'guide';
@@ -167,14 +172,23 @@
         interaction.page = p;
         interaction.startClient = { x: e.clientX, y: e.clientY };
       }}
-      onPortMouseDown={(e, id) => { e.stopPropagation(); console.log('Linking from', id); }}
-      onContentHandleMouseDown={(e, img, h) => { e.stopPropagation(); console.log('Content handle', h); }}
+      onPortMouseDown={(e: MouseEvent, id: string) => { e.stopPropagation(); console.log('Linking from', id); }}
+      onContentHandleMouseDown={(e: MouseEvent, img: ImageFrame, h: string) => { e.stopPropagation(); console.log('Content handle', h); }}
     />
-    <SidebarRight />
+    <SidebarRight 
+      onEditSwatch={(s: ColorSwatch) => { currentEditingSwatch = s; uiStore.showSwatchModal = true; }}
+      onEditParaStyle={(s: ParagraphStyle) => { currentEditingParaStyle = s; uiStore.showStyleEditorModal = true; }}
+      onEditCharStyle={(s: CharacterStyle) => { currentEditingCharStyle = s; uiStore.showStyleEditorModal = true; }}
+    />
   </div>
   <StatusBar />
 </main>
-<ModalManager />
+<ModalManager 
+  bind:currentEditingSwatch 
+  bind:currentEditingStyle={currentEditingParaStyle} 
+  bind:currentEditingCharStyle 
+  onCloseSwatch={() => { currentEditingSwatch = undefined; }}
+/>
 
 <style>
   :global(body) { margin: 0; padding: 0; background-color: #1e1e1e; color: #ccc; font-family: sans-serif; overflow: hidden; }

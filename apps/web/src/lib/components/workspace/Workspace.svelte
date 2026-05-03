@@ -4,7 +4,7 @@
   import { prefsStore } from "../../stores/prefs.svelte";
   import { convertUnit } from "../../utils/geometry";
   import { getSwatchColor } from "../../utils/color";
-  import type { Page, Frame, Guide, ImageFrame } from "../../types";
+  import type { Page, Frame, Guide, ImageFrame, Orientation } from "../../types";
 
   let { 
     onPageMouseDown, 
@@ -14,6 +14,14 @@
     onGuideMouseDown,
     onResizeMouseDown,
     onContentHandleMouseDown
+  }: {
+    onPageMouseDown: (e: MouseEvent, page: Page) => void,
+    onFrameMouseDown: (e: MouseEvent, frame: Frame) => void,
+    onPortMouseDown: (e: MouseEvent, id: string) => void,
+    onRulerMouseDown: (e: MouseEvent, orientation: Orientation) => void,
+    onGuideMouseDown: (e: MouseEvent, page: Page, guide: Guide) => void,
+    onResizeMouseDown: (e: MouseEvent, frame: Frame, handle: string) => void,
+    onContentHandleMouseDown: (e: MouseEvent, image: ImageFrame, handle: string) => void
   } = $props();
   function focusOnMount(node: HTMLElement) {
     setTimeout(() => node.focus(), 10);

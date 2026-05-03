@@ -15,4 +15,8 @@ cargo clippy --workspace --all-targets -- -D warnings || exit 1
 echo "📐 Checking formatting..."
 cargo fmt --check || exit 1
 
+# Run Svelte check
+echo "🧹 Running svelte-check..."
+npm --prefix apps/web run check || exit 1
+
 echo "✅ All checks passed!"
