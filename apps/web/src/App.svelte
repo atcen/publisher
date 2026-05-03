@@ -17,28 +17,38 @@
   // Persistent interaction state
   let interaction = {
     active: false,
-    type: null as 'create' | 'drag' | 'resize' | null,
+    type: null as 'create' | 'drag' | 'resize' | 'guide' | null,
     startClient: { x: 0, y: 0 },
     initialModel: { x: 0, y: 0, w: 0, h: 0 },
     frame: null as Frame | null,
+    guide: null as Guide | null,
+    page: null as Page | null,
     handle: ""
   };
 
   function handleGlobalMove(e: MouseEvent) {
-    if (!interaction.active || !interaction.frame) return;
+    if (!interaction.active) return;
     
     const dx = (e.clientX - interaction.startClient.x) / uiStore.zoom;
     const dy = (e.clientY - interaction.startClient.y) / uiStore.zoom;
 
-    if (interaction.type === 'create') {
+    if (interaction.type === 'create' && interaction.frame) {
       interaction.frame.width = Math.max(1, dx);
       interaction.frame.height = Math.max(1, dy);
-    } else if (interaction.type === 'resize') {
+    } else if (interaction.type === 'resize' && interaction.frame) {
       if (interaction.handle.includes('e')) interaction.frame.width = Math.max(2, interaction.initialModel.w + dx);
       if (interaction.handle.includes('s')) interaction.frame.height = Math.max(2, interaction.initialModel.h + dy);
-    } else if (interaction.type === 'drag') {
+    } else if (interaction.type === 'drag' && interaction.frame) {
       interaction.frame.x = interaction.initialModel.x + dx;
       interaction.frame.y = interaction.initialModel.y + dy;
+    } else if (interaction.type === 'guide' && interaction.guide) {
+      const pageEl = document.querySelector('.page');
+      if (pageEl) {
+        const r = pageEl.getBoundingClientRect();
+        const x = (e.clientX - r.left) / uiStore.zoom;
+        const y = (e.clientY - r.top) / uiStore.zoom;
+        interaction.guide.position = interaction.guide.orientation === 'Horizontal' ? y : x;
+      }
     }
     docStore.markModified();
   }
@@ -57,8 +67,13 @@
       }
       docStore.markModified();
     }
-    interaction.active = false; interaction.type = null; interaction.frame = null;
+    interaction.active = false;
+    interaction.type = null;
+    interaction.frame = null;
+    interaction.guide = null;
+    interaction.page = null;
   }
+
 
   onMount(() => {
     prefsStore.load();
@@ -132,6 +147,28 @@
         interaction.frame = f; 
       }}
       onResizeMouseDown={(e, f, h) => { e.stopPropagation(); interaction.active = true; interaction.type = 'resize'; interaction.handle = h; interaction.startClient = { x: e.clientX, y: e.clientY }; interaction.initialModel = {x:f.x, y:f.y, w:f.width, h:f.height}; interaction.frame = f; }}
+      onRulerMouseDown={(e, o) => {
+        e.stopPropagation();
+        if (!docStore.activePage) return;
+        docStore.pushToUndo();
+        const g: Guide = { position: 0, orientation: o, locked: false, color: null };
+        docStore.activePage.guides.push(g);
+        interaction.active = true;
+        interaction.type = 'guide';
+        interaction.guide = g;
+        interaction.page = docStore.activePage;
+        interaction.startClient = { x: e.clientX, y: e.clientY };
+      }}
+      onGuideMouseDown={(e, p, g) => {
+        e.stopPropagation();
+        interaction.active = true;
+        interaction.type = 'guide';
+        interaction.guide = g;
+        interaction.page = p;
+        interaction.startClient = { x: e.clientX, y: e.clientY };
+      }}
+      onPortMouseDown={(e, id) => { e.stopPropagation(); console.log('Linking from', id); }}
+      onContentHandleMouseDown={(e, img, h) => { e.stopPropagation(); console.log('Content handle', h); }}
     />
     <SidebarRight />
   </div>
