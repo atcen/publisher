@@ -15,7 +15,7 @@
     onResizeMouseDown,
     onContentHandleMouseDown
   }: {
-    onPageMouseDown: (e: MouseEvent, page: Page) => void,
+    onPageMouseDown: (e: MouseEvent, page: Page, el: HTMLElement) => void,
     onFrameMouseDown: (e: MouseEvent, frame: Frame) => void,
     onPortMouseDown: (e: MouseEvent, id: string) => void,
     onRulerMouseDown: (e: MouseEvent, orientation: Orientation) => void,
@@ -73,7 +73,11 @@
           <div 
             class="page" 
             style="width: {page.width}px; height: {page.height}px;" 
-            onmousedown={(e) => { e.stopPropagation(); onPageMouseDown(e, page); }}
+            onmousedown={(e) => { 
+              const el = e.currentTarget as HTMLElement;
+              e.stopPropagation(); 
+              onPageMouseDown(e, page, el); 
+            }}
           >
             {#if uiStore.snapX !== null}<div class="snap-guide vertical" style="left: {uiStore.snapX}px"></div>{/if}
             {#if uiStore.snapY !== null}<div class="snap-guide horizontal" style="top: {uiStore.snapY}px"></div>{/if}
@@ -111,57 +115,54 @@
               {@render ParentContent(page, page.applied_parent_id, pageIdxInSpread)}
             {/if}
 
-            {#each docStore.doc.layers as layer (layer.id)}
-              {#if layer.visible}
-                {#each page.frames as frame (frame.id)}
-                  {#if frame.layer_id === layer.id}
-                    <div 
-                      class="frame-container" 
-                      class:selected={uiStore.selectedFrameIds.includes(frame.id)} 
-                      class:content-mode={uiStore.isContentMode && uiStore.selectedFrameIds.includes(frame.id)} 
-                      style="left: {frame.x}px; top: {frame.y}px; width: {frame.width}px; height: {frame.height}px; transform: rotate({frame.rotation}deg); --layer-color: {layer.color};"
-                    >
-                      <div 
-                        class="frame-content" 
-                        onmousedown={(e) => onFrameMouseDown(e, frame)} 
-                        ondblclick={() => { if (frame.data.Text) uiStore.isContentMode = true; }}
-                        style="background: {frame.fill_color ? getSwatchColor(frame.fill_color, docStore.doc) : 'transparent'}; border: {frame.stroke_width}px solid {frame.stroke_color ? getSwatchColor(frame.stroke_color, docStore.doc) : 'transparent'}; {frame.data.Text ? `font-size: ${frame.data.Text.font_size_override ?? (docStore.doc.styles.paragraph_styles.find(s => s.name === frame.data.Text?.paragraph_style) || docStore.doc.styles.paragraph_styles[0]).font_size ?? 12}px;` : ''}"
-                      >
-                        {#if frame.data.Text}
-                          {#if uiStore.isContentMode && uiStore.selectedFrameIds.includes(frame.id)}
-                            <textarea
-                              class="inline-editor"
-                              bind:value={frame.data.Text.content}
-                              oninput={() => { if (frame.data.Text?.frame_type === 'Point') docStore.convertTextFrameType(frame, 'Point'); docStore.markModified(); }}
-                              onmousedown={(e) => e.stopPropagation()}
-                              onkeydown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); uiStore.isContentMode = false; } }}
-                              use:focusOnMount
-                            ></textarea>
-                          {:else}
-                            <div class="text-content-wrapper">
-                              {frame.data.Text.content}
-                            </div>
-                          {/if}
-                          
-                          <!-- Overflow Indicator -->
-                          {#if frame.data.Text.frame_type === 'Area' && !uiStore.isContentMode}
-                            <div class="overflow-indicator" title="Textüberlauf!"></div>
-                          {/if}
-                        {:else if frame.data.Image}
-                          <div class="image-content" style="transform: translate({frame.data.Image.content_x}px, {frame.data.Image.content_y}px) scale({frame.data.Image.content_scale_x}, {frame.data.Image.content_scale_y});">
-                            <div class="image-placeholder">{#if frame.data.Image.asset_path}Bild{:else}Kein Bild{/if}</div>
-                          </div>
-                        {:else if frame.data.Group}
-                          <div class="group-content">
-                            {#each frame.data.Group.frames as c}
-                              <div class="frame-preview" style="left: {c.x}px; top: {c.y}px; width: {c.width}px; height: {c.height}px;"></div>
-                            {/each}
-                          </div>
-                        {/if}
+            {#each page.frames as frame (frame.id)}
+              {@const layer = docStore.doc.layers.find(l => l.id === frame.layer_id)}
+              {#if !layer || layer.visible}
+                <div 
+                  class="frame frame-container" 
+                  class:selected={uiStore.selectedFrameIds.includes(frame.id)} 
+                  class:content-mode={uiStore.isContentMode && uiStore.selectedFrameIds.includes(frame.id)} 
+                  onmousedown={(e) => onFrameMouseDown(e, frame)} 
+                  ondblclick={() => { if (frame.data.Text) uiStore.isContentMode = true; }}
+                  style="left: {frame.x}px; top: {frame.y}px; width: {frame.width}px; height: {frame.height}px; transform: rotate({frame.rotation}deg); --layer-color: {layer?.color ?? '#007acc'};"
+                >
+                  <div 
+                    class="frame-content" 
+                    style="background: {frame.fill_color ? getSwatchColor(frame.fill_color, docStore.doc) : 'transparent'}; border: {frame.stroke_width}px solid {frame.stroke_color ? getSwatchColor(frame.stroke_color, docStore.doc) : 'transparent'}; {frame.data.Text ? `font-size: ${frame.data.Text.font_size_override ?? (docStore.doc.styles.paragraph_styles.find(s => s.name === frame.data.Text?.paragraph_style) || docStore.doc.styles.paragraph_styles[0]).font_size ?? 12}px;` : ''}"
+                  >
+                    {#if frame.data.Text}
+                      {#if uiStore.isContentMode && uiStore.selectedFrameIds.includes(frame.id)}
+                        <textarea
+                          class="inline-editor"
+                          bind:value={frame.data.Text.content}
+                          oninput={() => { if (frame.data.Text?.frame_type === 'Point') docStore.convertTextFrameType(frame, 'Point'); docStore.markModified(); }}
+                          onmousedown={(e) => e.stopPropagation()}
+                          onkeydown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); uiStore.isContentMode = false; } }}
+                          use:focusOnMount
+                        ></textarea>
+                      {:else}
+                        <div class="text-content-wrapper">
+                          {frame.data.Text.content}
+                        </div>
+                      {/if}
+                      
+                      <!-- Overflow Indicator -->
+                      {#if frame.data.Text.frame_type === 'Area' && !uiStore.isContentMode}
+                        <div class="overflow-indicator" title="Textüberlauf!"></div>
+                      {/if}
+                    {:else if frame.data.Image}
+                      <div class="image-content" style="transform: translate({frame.data.Image.content_x}px, {frame.data.Image.content_y}px) scale({frame.data.Image.content_scale_x}, {frame.data.Image.content_scale_y});">
+                        <div class="image-placeholder">{#if frame.data.Image.asset_path}Bild{:else}Kein Bild{/if}</div>
                       </div>
-                    </div>
-                  {/if}
-                {/each}
+                    {:else if frame.data.Group}
+                      <div class="group-content">
+                        {#each frame.data.Group.frames as c}
+                          <div class="frame-preview" style="left: {c.x}px; top: {c.y}px; width: {c.width}px; height: {c.height}px;"></div>
+                        {/each}
+                      </div>
+                    {/if}
+                  </div>
+                </div>
               {/if}
             {/each}
 
@@ -201,10 +202,9 @@
 <style>
   .workspace-container { 
     flex: 1; overflow: auto; background: #181818; position: relative; padding: 60px; 
-    user-select: none; /* Prevent browser text selection on workspace */
-    -webkit-user-select: none;
+    user-select: none; -webkit-user-select: none;
   }
-  .workspace { display: flex; flex-direction: column; align-items: center; gap: 50px; }
+  .workspace { display: flex; flex-direction: column; align-items: flex-start; gap: 50px; }
   .spread { display: flex; gap: 2px; background: #000; padding: 2px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); transform: scale(var(--zoom)); transform-origin: top center; }
   .page { background: white; position: relative; color: black; }
   .margin-box { position: absolute; border: 1px solid #ff00ff22; pointer-events: none; }
@@ -226,7 +226,7 @@
     position: absolute; 
     box-sizing: border-box; 
     z-index: 5;
-    pointer-events: none; /* Let events pass through to content by default */
+    pointer-events: auto; /* Catch clicks for selection */
   }
   .frame-content {
     position: absolute;
@@ -234,7 +234,7 @@
     overflow: hidden; 
     background: rgba(128, 128, 128, 0.05); 
     color: #1a1a1a;
-    pointer-events: auto; /* Content handles the interaction */
+    pointer-events: none; /* Let clicks go to the container handler */
     z-index: 1;
     outline: 1px solid rgba(128, 128, 128, 0.2); /* Subtle default outline */
     outline-offset: -1px;
@@ -275,6 +275,7 @@
     resize: none !important;
     user-select: text !important; /* Allow text selection while editing */
     -webkit-user-select: text !important;
+    pointer-events: auto; /* Always interactive */
   }
   .inline-editor:focus {
     outline: none !important;

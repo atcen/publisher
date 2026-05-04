@@ -32,11 +32,15 @@ test.describe('Text Frame Creation', () => {
     // 2. Drag on a page to create an Area Text frame
     const pageElement = page.locator('.page').first();
     await pageElement.waitFor({ state: 'visible' });
+    const pageBox = await pageElement.boundingBox();
+    if (!pageBox) throw new Error('Page box not found');
 
-    // Perform a drag from (100, 100) to (250, 150)
-    await page.mouse.move(200, 200);
+    // Perform a drag relative to page
+    const startX = pageBox.x + 100;
+    const startY = pageBox.y + 100;
+    await page.mouse.move(startX, startY);
     await page.mouse.down();
-    await page.mouse.move(350, 300);
+    await page.mouse.move(startX + 150, startY + 100);
     await page.mouse.up();
 
     // 3. Verify Area Text frame is created and selected
@@ -81,9 +85,11 @@ test.describe('Text Frame Creation', () => {
     // 2. Click on a page to create a frame
     const pageElement = page.locator('.page').first();
     await pageElement.waitFor({ state: 'visible' });
+    const pageBox = await pageElement.boundingBox();
+    if (!pageBox) throw new Error('Page box not found');
     
-    // Simple click at (150, 150)
-    await page.mouse.move(250, 250);
+    // Simple click relative to page
+    await page.mouse.move(pageBox.x + 150, pageBox.y + 150);
     await page.mouse.down();
     await page.mouse.up();
 

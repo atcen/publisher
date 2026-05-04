@@ -63,10 +63,11 @@
       if (uiStore.activeTool === 'text') {
         const area = interaction.frame.width * interaction.frame.height;
         if (area < 100) { // Tiny area means it was likely a click -> Point Text
-          interaction.frame.data.Text!.content = ""; 
+          interaction.frame.data.Text!.content = "Neuer Text"; 
           docStore.convertTextFrameType(interaction.frame, 'Point');
-          // Provide a comfortable initial width for empty frames, but height is now exact from store
           interaction.frame.width = Math.max(interaction.frame.width, 100); 
+        } else {
+          interaction.frame.data.Text!.content = "Neuer Text";
         }
         uiStore.isContentMode = true;
       }
@@ -78,7 +79,6 @@
     interaction.guide = null;
     interaction.page = null;
   }
-
 
   onMount(() => {
     prefsStore.load();
@@ -106,11 +106,12 @@
     };
   });
 
-  function startCreating(e: MouseEvent, page: Page) {
+  function startCreating(e: MouseEvent, page: Page, el: HTMLElement) {
     if (uiStore.activeTool === 'select') { uiStore.resetSelection(); return; }
+    if (!docStore.doc.layers || docStore.doc.layers.length === 0) return;
     e.stopPropagation();
     
-    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const r = el.getBoundingClientRect();
     const x = (e.clientX - r.left) / uiStore.zoom;
     const y = (e.clientY - r.top) / uiStore.zoom;
     
@@ -126,7 +127,6 @@
     interaction.active = true;
     interaction.type = 'create';
     interaction.startClient = { x: e.clientX, y: e.clientY };
-    // CRITICAL FIX: Fetch the proxy object from the array instead of using the raw `nf` object
     interaction.frame = page.frames[page.frames.length - 1];
   }
 </script>
