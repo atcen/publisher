@@ -2,6 +2,7 @@ pub mod builder;
 pub mod document_manager;
 pub mod document_state;
 pub mod history;
+pub mod layout;
 pub mod paper;
 pub mod persistence;
 pub mod units;
@@ -9,6 +10,7 @@ pub mod units;
 pub use crate::units::{Pt, Unit};
 pub use document_state::DocumentState;
 pub use history::{Action, History};
+pub use layout::LayoutEngine;
 use serde::{Deserialize, Serialize};
 
 pub fn init() {
@@ -90,6 +92,32 @@ impl Document {
             .map(|p| Spread { pages: vec![p] })
             .collect();
         self.reorganize_spreads();
+    }
+
+    pub fn find_frame(&self, id: &str) -> Option<&Frame> {
+        for spread in &self.spreads {
+            for page in &spread.pages {
+                for frame in &page.frames {
+                    if let Some(found) = frame.find_recursive(id) {
+                        return Some(found);
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    pub fn find_frame_mut(&mut self, id: &str) -> Option<&mut Frame> {
+        for spread in &mut self.spreads {
+            for page in &mut spread.pages {
+                for frame in &mut page.frames {
+                    if let Some(found) = frame.find_recursive_mut(id) {
+                        return Some(found);
+                    }
+                }
+            }
+        }
+        None
     }
 }
 
@@ -203,7 +231,7 @@ fn default_color_profile() -> String {
     "sRGB".to_string()
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Bleed {
     pub top: Pt,
     pub bottom: Pt,
@@ -443,6 +471,34 @@ impl Frame {
             data,
         }
     }
+
+    pub fn find_recursive(&self, id: &str) -> Option<&Frame> {
+        if self.id == id {
+            return Some(self);
+        }
+        if let FrameData::Group(group) = &self.data {
+            for frame in &group.frames {
+                if let Some(found) = frame.find_recursive(id) {
+                    return Some(found);
+                }
+            }
+        }
+        None
+    }
+
+    pub fn find_recursive_mut(&mut self, id: &str) -> Option<&mut Frame> {
+        if self.id == id {
+            return Some(self);
+        }
+        if let FrameData::Group(group) = &mut self.data {
+            for frame in &mut group.frames {
+                if let Some(found) = frame.find_recursive_mut(id) {
+                    return Some(found);
+                }
+            }
+        }
+        None
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -473,6 +529,9 @@ pub struct TextFrame {
     pub align_to_baseline_grid: bool,
     pub frame_type: TextFrameType,
     pub font_size_override: Option<Pt>,
+    pub text_color_override: Option<String>,
+    pub text_stroke_color_override: Option<String>,
+    pub text_stroke_width_override: Option<Pt>,
 }
 
 impl TextFrame {
@@ -485,6 +544,9 @@ impl TextFrame {
             align_to_baseline_grid: false,
             frame_type: TextFrameType::Area,
             font_size_override: None,
+            text_color_override: None,
+            text_stroke_color_override: None,
+            text_stroke_width_override: None,
         }
     }
 
@@ -868,6 +930,8 @@ pub struct ParagraphStyle {
     pub space_before: Option<Pt>,
     pub space_after: Option<Pt>,
     pub color_swatch: Option<String>,
+    pub text_stroke_color: Option<String>,
+    pub text_stroke_width: Option<Pt>,
     #[serde(default)]
     pub variation_settings: Vec<FontVariationSetting>,
     pub kerning_mode: Option<KerningMode>,
@@ -889,6 +953,8 @@ impl Default for ParagraphStyle {
             space_before: Some(Pt(0.0)),
             space_after: Some(Pt(0.0)),
             color_swatch: None,
+            text_stroke_color: None,
+            text_stroke_width: None,
             variation_settings: Vec::new(),
             kerning_mode: Some(KerningMode::Metric),
         }
@@ -911,6 +977,8 @@ impl ParagraphStyle {
             space_before: None,
             space_after: None,
             color_swatch: None,
+            text_stroke_color: None,
+            text_stroke_width: None,
             variation_settings: Vec::new(),
             kerning_mode: None,
         }
@@ -927,6 +995,8 @@ pub struct CharacterStyle {
     pub leading: Option<Pt>,
     pub tracking: Option<f64>,
     pub color_swatch: Option<String>,
+    pub text_stroke_color: Option<String>,
+    pub text_stroke_width: Option<Pt>,
     #[serde(default)]
     pub variation_settings: Vec<FontVariationSetting>,
     pub kerning_mode: Option<KerningMode>,
@@ -943,6 +1013,8 @@ impl CharacterStyle {
             leading: None,
             tracking: None,
             color_swatch: None,
+            text_stroke_color: None,
+            text_stroke_width: None,
             variation_settings: Vec::new(),
             kerning_mode: None,
         }
@@ -1008,6 +1080,12 @@ impl Styles {
                 if resolved.color_swatch.is_none() {
                     resolved.color_swatch = base_style.color_swatch.clone();
                 }
+                if resolved.text_stroke_color.is_none() {
+                    resolved.text_stroke_color = base_style.text_stroke_color.clone();
+                }
+                if resolved.text_stroke_width.is_none() {
+                    resolved.text_stroke_width = base_style.text_stroke_width;
+                }
                 if resolved.variation_settings.is_empty() {
                     resolved.variation_settings = base_style.variation_settings.clone();
                 }
@@ -1051,6 +1129,12 @@ impl Styles {
                 }
                 if resolved.color_swatch.is_none() {
                     resolved.color_swatch = base_style.color_swatch.clone();
+                }
+                if resolved.text_stroke_color.is_none() {
+                    resolved.text_stroke_color = base_style.text_stroke_color.clone();
+                }
+                if resolved.text_stroke_width.is_none() {
+                    resolved.text_stroke_width = base_style.text_stroke_width;
                 }
                 if resolved.variation_settings.is_empty() {
                     resolved.variation_settings = base_style.variation_settings.clone();

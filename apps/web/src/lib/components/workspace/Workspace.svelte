@@ -23,6 +23,32 @@
     onResizeMouseDown: (e: MouseEvent, frame: Frame, handle: string) => void,
     onContentHandleMouseDown: (e: MouseEvent, image: ImageFrame, handle: string) => void
   } = $props();
+
+  let containerEl = $state<HTMLElement>();
+  let activePageEl = $state<HTMLElement | null>(null);
+
+  let rulerOffsetX = $state(0);
+  let rulerOffsetY = $state(0);
+
+  $effect(() => {
+    if (uiStore.activePageIndex >= 0 || uiStore.zoom) {
+      // Trigger update when active page or zoom changes
+      const updateOffsets = () => {
+        const activeEl = document.querySelector(`.page[data-page-index="${uiStore.activePageIndex}"]`) as HTMLElement;
+        if (activeEl && containerEl) {
+          const rect = activeEl.getBoundingClientRect();
+          const containerRect = containerEl.getBoundingClientRect();
+          rulerOffsetX = rect.left - containerRect.left + containerEl.scrollLeft;
+          rulerOffsetY = rect.top - containerRect.top + containerEl.scrollTop;
+        }
+      };
+      updateOffsets();
+      // Also update on scroll
+      containerEl?.addEventListener('scroll', updateOffsets);
+      return () => containerEl?.removeEventListener('scroll', updateOffsets);
+    }
+  });
+
   function focusOnMount(node: HTMLElement) {
     setTimeout(() => node.focus(), 10);
   }
@@ -50,31 +76,38 @@
   {/each}
 {/snippet}
 
-<div class="workspace-container" onmousedown={() => uiStore.resetSelection()}>
+<div class="workspace-container" bind:this={containerEl} onmousedown={() => uiStore.resetSelection()}>
   <div class="ruler top-ruler" onmousedown={(e) => onRulerMouseDown(e, 'Vertical')}>
-    {#each Array(20) as _, i}
-      <div class="ruler-tick" style="left: {i * 100 * uiStore.zoom}px">
-        {convertUnit(i * 100, 'pt', prefsStore.prefs.default_unit).toFixed(0)}
+    {#each Array(50) as _, i}
+      {@const tickPos = (i - 10) * 100}
+      <div class="ruler-tick" style="left: {rulerOffsetX + tickPos * uiStore.zoom}px">
+        {convertUnit(tickPos, 'pt', prefsStore.prefs.default_unit).toFixed(0)}
       </div>
     {/each}
   </div>
   <div class="ruler left-ruler" onmousedown={(e) => onRulerMouseDown(e, 'Horizontal')}>
-    {#each Array(20) as _, i}
-      <div class="ruler-tick" style="top: {i * 100 * uiStore.zoom}px">
-        {convertUnit(i * 100, 'pt', prefsStore.prefs.default_unit).toFixed(0)}
+    {#each Array(50) as _, i}
+      {@const tickPos = (i - 5) * 100}
+      <div class="ruler-tick" style="top: {rulerOffsetY + tickPos * uiStore.zoom}px">
+        {convertUnit(tickPos, 'pt', prefsStore.prefs.default_unit).toFixed(0)}
       </div>
     {/each}
   </div>
   
   <div class="workspace" style="--zoom: {uiStore.zoom}">
     {#each docStore.doc.spreads as spread}
+      {@const pages = docStore.doc.spreads.flatMap(s => s.pages)}
       <div class="spread">
         {#each spread.pages as page, pageIdxInSpread}
+          {@const globalIdx = pages.indexOf(page)}
           <div 
             class="page" 
+            data-page-index={globalIdx}
+            class:active={uiStore.activePageIndex === globalIdx}
             style="width: {page.width}px; height: {page.height}px;" 
             onmousedown={(e) => { 
               const el = e.currentTarget as HTMLElement;
+              uiStore.activePageIndex = globalIdx;
               e.stopPropagation(); 
               onPageMouseDown(e, page, el); 
             }}
@@ -215,9 +248,9 @@
   .guide { position: absolute; z-index: 10; cursor: grab; background: #00ffff44; }
   .guide.horizontal { left: 0; right: 0; height: 1px; }
   .guide.vertical { top: 0; bottom: 0; width: 1px; }
-  .ruler { position: absolute; background: #2d2d2d; border: 1px solid #111; z-index: 20; color: #888; font-size: 9px; cursor: crosshair; }
-  .top-ruler { top:0; left:0; right:0; height:20px; }
-  .left-ruler { left:0; top:0; bottom:0; width:20px; }
+  .ruler { position: sticky; background: #2d2d2d; border: 1px solid #111; z-index: 30; color: #888; font-size: 9px; cursor: crosshair; }
+  .top-ruler { top: -60px; left: -60px; right: -60px; height: 20px; margin-bottom: -20px; }
+  .left-ruler { left: -60px; top: -60px; bottom: -60px; width: 20px; margin-right: -20px; float: left; }
   .ruler-tick { position: absolute; padding: 2px; }
   .snap-guide { position: absolute; border: 1px dashed #ff00ff; z-index: 100; pointer-events: none; }
   .snap-guide.horizontal { left: 0; right: 0; }

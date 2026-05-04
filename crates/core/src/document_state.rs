@@ -27,6 +27,10 @@ impl DocumentState {
         self.history.push(action);
     }
 
+    pub fn reflow(&mut self) {
+        crate::layout::LayoutEngine::reflow(&mut self.document);
+    }
+
     pub fn can_undo(&self) -> bool {
         self.history.can_undo()
     }
