@@ -18,9 +18,9 @@ We need to implement this distinction to allow for more flexible typography layo
    - Update the frame resizing handles to behave differently based on the type (Point text scales font size, Area text changes frame bounds).
 
 ## Acceptance
-- [ ] `TextFrame` struct has a `frame_type` property.
-- [ ] "Point Text" frames automatically size themselves to fit their content.
-- [ ] Scaling a "Point Text" frame in the UI updates the font size of the content.
-- [ ] "Area Text" continues to wrap text within fixed bounds.
-- [ ] Switching from "Area" to "Point" text preserves the current text but recalculates the frame size.
-- [ ] Existing tests pass and new tests for "Point Text" are added.
+- [x] `TextFrame` struct has a `frame_type` property.
+- [x] "Point Text" frames automatically size themselves to fit their content.
+- [x] Scaling a "Point Text" frame in the UI updates the font size of the content.
+- [x] "Area Text" continues to wrap text within fixed bounds.
+- [x] Switching from "Area" to "Point" text preserves the current text but recalculates the frame size.
+- [x] Existing tests pass and new tests for "Point Text" are added.

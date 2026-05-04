@@ -1,0 +1,34 @@
+{
+  "base_branch": "main",
+  "branch_prefix": "codex/issue",
+  "worktree_root": "../publisher-agent-worktrees",
+  "state_root": ".agent-run",
+  "max_review_loops": 3,
+  "ci_gated_labels": [
+    "ci",
+    "platform",
+    "release"
+  ],
+  "checks": {
+    "test": [
+      "cargo test --workspace"
+    ],
+    "lint": [
+      "cargo fmt --check",
+      "cargo clippy --workspace --all-targets -- -D warnings",
+      "npm --prefix apps/web run check"
+    ]
+  },
+  "codex": {
+    "command": "codex",
+    "model": null,
+    "sandbox": "danger-full-access",
+    "approval_policy": null
+  },
+  "github": {
+    "draft_pr": true,
+    "labels": [
+      "auto"
+    ]
+  }
+}

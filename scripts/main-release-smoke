@@ -1,0 +1,201 @@
+#!/usr/bin/env python3
+"""Temporarily push a prepared issue branch to main and watch release CI.
+
+This is intentionally separate from `agent-run`: it is an escape hatch for
+CI-only release failures where a push-to-main workflow must be exercised.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import shlex
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+STATE_ROOT = ROOT / ".agent-run" / "issues"
+
+
+class SmokeError(RuntimeError):
+    pass
+
+
+def run(args: list[str], *, cwd: Path = ROOT, capture: bool = False, check: bool = True) -> subprocess.CompletedProcess[str]:
+    result = subprocess.run(
+        args,
+        cwd=cwd,
+        text=True,
+        stdout=subprocess.PIPE if capture else None,
+        stderr=subprocess.STDOUT if capture else None,
+        check=False,
+    )
+    if check and result.returncode != 0:
+        output = result.stdout if capture else "command failed"
+        raise SmokeError(f"{shlex.join(args)}\n{output}")
+    return result
+
+
+def read_issue_state(issue: int) -> dict:
+    path = STATE_ROOT / str(issue) / "state.json"
+    if not path.exists():
+        raise SmokeError(f"missing state for issue #{issue}: {path}")
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def git_sha(ref: str) -> str:
+    return run(["git", "rev-parse", ref], capture=True).stdout.strip()
+
+
+def repo_slug() -> str:
+    return run(["gh", "repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner"], capture=True).stdout.strip()
+
+
+def admin_enforcement_enabled(repo: str) -> bool:
+    result = run(
+        ["gh", "api", f"repos/{repo}/branches/main/protection/enforce_admins", "--jq", ".enabled"],
+        capture=True,
+    )
+    return result.stdout.strip() == "true"
+
+
+def set_admin_enforcement(repo: str, enabled: bool) -> None:
+    method = "POST" if enabled else "DELETE"
+    run(["gh", "api", "-X", method, f"repos/{repo}/branches/main/protection/enforce_admins"])
+
+
+def ensure_branch_is_descendant(branch_sha: str, base_sha: str) -> None:
+    result = run(["git", "merge-base", "--is-ancestor", base_sha, branch_sha], check=False)
+    if result.returncode != 0:
+        raise SmokeError(f"source branch is not a fast-forward from main: {base_sha} -> {branch_sha}")
+
+
+def latest_matching_run(workflow: str, head_sha: str) -> dict | None:
+    result = run(
+        [
+            "gh",
+            "run",
+            "list",
+            "--workflow",
+            workflow,
+            "--branch",
+            "main",
+            "--event",
+            "push",
+            "--limit",
+            "10",
+            "--json",
+            "databaseId,headSha,status,conclusion,url,createdAt",
+        ],
+        capture=True,
+    )
+    for item in json.loads(result.stdout or "[]"):
+        if item.get("headSha") == head_sha:
+            return item
+    return None
+
+
+def wait_for_run(workflow: str, head_sha: str, timeout_seconds: int) -> dict:
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() < deadline:
+        run_data = latest_matching_run(workflow, head_sha)
+        if run_data:
+            return run_data
+        time.sleep(10)
+    raise SmokeError(f"timed out waiting for {workflow} push run on {head_sha}")
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Push an issue branch to main for a release smoke test.")
+    parser.add_argument("--issue", type=int, help="use branch/worktree from .agent-run issue state")
+    parser.add_argument("--branch", help="source branch to push to main")
+    parser.add_argument("--workflow", default="CI", help="GitHub Actions workflow name to watch")
+    parser.add_argument("--timeout", type=int, default=600, help="seconds to wait for the run to appear")
+    parser.add_argument("--execute", action="store_true", help="perform the main push")
+    parser.add_argument("--watch", action="store_true", help="watch the matching Actions run after push")
+    parser.add_argument("--restore", action="store_true", help="force-with-lease main back to its original SHA after watching")
+    parser.add_argument(
+        "--disable-admin-enforcement",
+        action="store_true",
+        help="temporarily let admins bypass branch protection for the push, then restore it",
+    )
+    parser.add_argument("--yes-i-know-this-touches-main", action="store_true", help="required with --execute")
+    return parser.parse_args()
+
+
+def main() -> int:
+    args = parse_args()
+    try:
+        if not args.issue and not args.branch:
+            raise SmokeError("provide --issue or --branch")
+
+        branch = args.branch
+        if args.issue:
+            state = read_issue_state(args.issue)
+            branch = state["branch"]
+
+        assert branch is not None
+        run(["git", "fetch", "origin", "main"])
+        main_sha = git_sha("origin/main")
+        branch_sha = git_sha(branch)
+        ensure_branch_is_descendant(branch_sha, main_sha)
+
+        print(f"main before:  {main_sha}")
+        print(f"source branch: {branch}")
+        print(f"source sha:    {branch_sha}")
+
+        push_cmd = ["git", "push", "origin", f"{branch}:refs/heads/main"]
+        print(f"push command:  {shlex.join(push_cmd)}")
+
+        if not args.execute:
+            print("dry-run only; add --execute --yes-i-know-this-touches-main to push")
+            return 0
+
+        if not args.yes_i_know_this_touches_main:
+            raise SmokeError("--execute requires --yes-i-know-this-touches-main")
+
+        repo = repo_slug()
+        restore_admin_enforcement = False
+        try:
+            if args.disable_admin_enforcement:
+                restore_admin_enforcement = admin_enforcement_enabled(repo)
+                if restore_admin_enforcement:
+                    print("temporarily disabling admin branch-protection enforcement")
+                    set_admin_enforcement(repo, False)
+
+            run(push_cmd)
+            print("pushed source branch to main")
+        finally:
+            if args.disable_admin_enforcement and restore_admin_enforcement:
+                print("restoring admin branch-protection enforcement")
+                set_admin_enforcement(repo, True)
+
+        run_data = wait_for_run(args.workflow, branch_sha, args.timeout)
+        print(f"workflow run: {run_data['url']}")
+
+        if args.watch:
+            run(["gh", "run", "watch", str(run_data["databaseId"])])
+
+        if args.restore:
+            restore_cmd = [
+                "git",
+                "push",
+                "--force-with-lease",
+                f"origin",
+                f"{main_sha}:refs/heads/main",
+            ]
+            print(f"restore command: {shlex.join(restore_cmd)}")
+            run(restore_cmd)
+            print(f"restored main to {main_sha}")
+
+        return 0
+    except SmokeError as exc:
+        print(f"main-release-smoke: {exc}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

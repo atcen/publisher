@@ -1,11 +1,15 @@
 export type Pt = number;
 
+export type TextFrameType = 'Point' | 'Area';
+
 export interface TextFrame {
   content: string;
   paragraph_style?: string;
   next_frame_id?: string;
   prev_frame_id?: string;
   align_to_baseline_grid: boolean;
+  frame_type: TextFrameType;
+  font_size_override?: Pt;
 }
 
 export interface ImageFrame {
