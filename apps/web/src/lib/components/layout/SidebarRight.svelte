@@ -6,6 +6,26 @@
 
   let { onEditSwatch, onEditParaStyle, onEditCharStyle } = $props();
 
+  let activeColorTarget = $state<'fill' | 'stroke' | 'text' | 'text-stroke'>('fill');
+
+  function handleApplySwatch(swatchName: string | undefined) {
+    if (docStore.selectedFrames.length === 0) return;
+    
+    docStore.pushToUndo();
+    for (const frame of docStore.selectedFrames) {
+      if (activeColorTarget === 'fill') {
+        frame.fill_color = swatchName;
+      } else if (activeColorTarget === 'stroke') {
+        frame.stroke_color = swatchName;
+      } else if (activeColorTarget === 'text' && frame.data.Text) {
+        frame.data.Text.text_color_override = swatchName;
+      } else if (activeColorTarget === 'text-stroke' && frame.data.Text) {
+        frame.data.Text.text_stroke_color_override = swatchName;
+      }
+    }
+    docStore.markModified();
+  }
+
   function handleAddSwatch() {
     const s = docStore.addSwatch();
     onEditSwatch(s);
@@ -53,12 +73,59 @@
   <div class="panel-header">
     Farbfelder <button class="header-btn" onclick={handleAddSwatch}>+</button>
   </div>
+  
+  <div class="color-targets">
+    <button 
+      class="target-btn" 
+      class:active={activeColorTarget === 'fill'} 
+      onclick={() => activeColorTarget = 'fill'}
+      title="Fläche"
+    >
+      <div class="target-indicator" style="background: {getSwatchColor(docStore.selectedFrames[0]?.fill_color || '')}"></div>
+      F
+    </button>
+    <button 
+      class="target-btn" 
+      class:active={activeColorTarget === 'stroke'} 
+      onclick={() => activeColorTarget = 'stroke'}
+      title="Kontur"
+    >
+      <div class="target-indicator" style="background: {getSwatchColor(docStore.selectedFrames[0]?.stroke_color || '')}"></div>
+      K
+    </button>
+    <button 
+      class="target-btn" 
+      class:active={activeColorTarget === 'text'} 
+      onclick={() => activeColorTarget = 'text'}
+      title="Textfarbe"
+    >
+      <div class="target-indicator" style="background: {getSwatchColor(docStore.selectedFrames[0]?.data.Text?.text_color_override || '')}"></div>
+      T
+    </button>
+    <button 
+      class="target-btn" 
+      class:active={activeColorTarget === 'text-stroke'} 
+      onclick={() => activeColorTarget = 'text-stroke'}
+      title="Textkontur"
+    >
+      <div class="target-indicator" style="background: {getSwatchColor(docStore.selectedFrames[0]?.data.Text?.text_stroke_color_override || '')}"></div>
+      TK
+    </button>
+  </div>
+
   <div class="swatches-grid">
+    <div 
+      class="swatch-item" 
+      onclick={() => handleApplySwatch(undefined)}
+    >
+      <div class="swatch-color none-swatch"></div>
+      <span class="swatch-name">[Keine]</span>
+    </div>
     {#each docStore.doc.swatches as swatch}
       <div 
         class="swatch-item" 
         class:is-spot={'Spot' in swatch.color} 
-        onclick={() => { if (docStore.selectedFrames[0]) { docStore.selectedFrames[0].fill_color = swatch.name; docStore.markModified(); } }} 
+        onclick={() => handleApplySwatch(swatch.name)} 
         oncontextmenu={(e) => { e.preventDefault(); onEditSwatch(swatch); }}
       >
         <div class="swatch-color" style="background: {getSwatchColor(swatch.name)}"></div>
@@ -120,6 +187,9 @@
         <label>Inhalt
           <textarea bind:value={frame.data.Text.content} oninput={() => { if (frame.data.Text?.frame_type === 'Point') docStore.convertTextFrameType(frame, 'Point'); docStore.markModified(); }}></textarea>
         </label>
+        <div class="prop-group">
+          <label>Text-Kontur <input type="number" step="0.1" bind:value={frame.data.Text.text_stroke_width_override} oninput={() => docStore.markModified()} /></label>
+        </div>
       {/if}
       
       {#if frame.data.Image}
@@ -228,7 +298,13 @@
   .swatch-item:hover { background: #444; }
   .swatch-item.is-spot::after { content: "•"; position: absolute; top: 2px; right: 4px; color: orange; font-size: 14px; }
   .swatch-color { width: 16px; height: 16px; border: 1px solid #111; }
+  .swatch-color.none-swatch { background: linear-gradient(to top right, transparent 45%, #ff0000 45%, #ff0000 55%, transparent 55%), #eee; position: relative; }
   .swatch-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .color-targets { display: flex; gap: 4px; padding: 8px 8px 0; }
+  .target-btn { flex: 1; height: 32px; background: #333; border: 1px solid #444; color: #aaa; font-size: 10px; cursor: pointer; border-radius: 2px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
+  .target-btn:hover { background: #444; }
+  .target-btn.active { background: #007acc; color: white; border-color: #008be5; }
+  .target-indicator { width: 12px; height: 4px; border: 1px solid #111; border-radius: 1px; }
   .style-item { padding: 4px 12px; border-bottom: 1px solid #333; cursor: pointer; font-size: 12px; }
   .style-item:hover { background: #3d3d3d; }
   .properties { padding: 8px 12px; display: flex; flex-direction: column; gap: 8px; font-size: 12px; }

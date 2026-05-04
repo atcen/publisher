@@ -10,6 +10,9 @@ export interface TextFrame {
   align_to_baseline_grid: boolean;
   frame_type: TextFrameType;
   font_size_override?: Pt;
+  text_color_override?: string;
+  text_stroke_color_override?: string;
+  text_stroke_width_override?: Pt;
 }
 
 export interface ImageFrame {
@@ -122,6 +125,9 @@ export interface ParagraphStyle {
   alignment?: 'Left' | 'Center' | 'Right' | 'Justify';
   variation_settings: FontVariationSetting[];
   kerning_mode?: KerningMode;
+  color_swatch?: string;
+  text_stroke_color?: string;
+  text_stroke_width?: Pt;
 }
 
 export interface CharacterStyle {
@@ -132,6 +138,9 @@ export interface CharacterStyle {
   font_size?: Pt;
   variation_settings: FontVariationSetting[];
   kerning_mode?: KerningMode;
+  color_swatch?: string;
+  text_stroke_color?: string;
+  text_stroke_width?: Pt;
 }
 
 export interface Styles {
